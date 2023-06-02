@@ -1,6 +1,9 @@
 [workspace]
 members = [
-    "programs/*",
+    "programs/merkle-distributor",
+    "programs/govern",
+    "programs/smart-wallet",
+    "programs/voter",
     "cli/*"
 ]
 

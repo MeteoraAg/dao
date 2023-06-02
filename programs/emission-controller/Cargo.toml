@@ -1,0 +1,23 @@
+[package]
+name = "emission-controller"
+version = "0.1.0"
+description = "Created with Anchor"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "emission_controller"
+
+[features]
+no-entrypoint = []
+no-idl = []
+cpi = ["no-entrypoint"]
+default = []
+test-bpf = []
+
+[dependencies]
+anchor-lang = "0.26.0"
+vipers = {path = "../../libs/vipers"}
+# num-traits = "0.2"
+quarry = {path="../quarry", features=["no-entrypoint", "cpi"]}
+# voter = {path = "../voter", features=["no-entrypoint"]}
