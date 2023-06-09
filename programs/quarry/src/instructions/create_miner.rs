@@ -1,33 +1,6 @@
 use crate::*;
 
-/// Creates a [Miner] for the given authority.
-///
-/// Anyone can call this; this is an associated account.
-pub fn handler(ctx: Context<CreateMiner>) -> Result<()> {
-    let quarry = &mut ctx.accounts.quarry;
-    let index = quarry.num_miners;
-    quarry.num_miners = unwrap_int!(quarry.num_miners.checked_add(1));
-
-    let miner = &mut ctx.accounts.miner;
-    miner.authority = ctx.accounts.authority.key();
-    miner.bump = unwrap_bump!(ctx, "miner");
-    miner.quarry = ctx.accounts.quarry.key();
-    miner.token_vault_key = ctx.accounts.miner_vault.key();
-    miner.rewards_earned = 0;
-    miner.rewards_per_token_paid = 0;
-    miner.balance = 0;
-    miner.index = index;
-
-    emit!(MinerCreateEvent {
-        authority: miner.authority,
-        quarry: miner.quarry,
-        miner: miner.key(),
-    });
-
-    Ok(())
-}
-
-/// Accounts for [quarry_mine::create_miner].
+/// Accounts for [quarry::create_miner].
 #[derive(Accounts)]
 pub struct CreateMiner<'info> {
     /// Authority of the [Miner].
@@ -43,7 +16,7 @@ pub struct CreateMiner<'info> {
         ],
         bump,
         payer = payer,
-        space = 8 + Miner::LEN
+        space = 8 + std::mem::size_of::<Miner>()
     )]
     pub miner: Box<Account<'info, Miner>>,
 
@@ -69,6 +42,33 @@ pub struct CreateMiner<'info> {
 
     /// SPL Token program.
     pub token_program: Program<'info, Token>,
+}
+
+/// Creates a [Miner] for the given authority.
+///
+/// Anyone can call this; this is an associated account.
+pub fn handler(ctx: Context<CreateMiner>) -> Result<()> {
+    let quarry = &mut ctx.accounts.quarry;
+    let index = quarry.num_miners;
+    quarry.num_miners = unwrap_int!(quarry.num_miners.checked_add(1));
+
+    let miner = &mut ctx.accounts.miner;
+    miner.authority = ctx.accounts.authority.key();
+    miner.bump = unwrap_bump!(ctx, "miner");
+    miner.quarry = ctx.accounts.quarry.key();
+    miner.token_vault_key = ctx.accounts.miner_vault.key();
+    miner.rewards_earned = 0;
+    miner.rewards_per_token_paid = 0;
+    miner.balance = 0;
+    miner.index = index;
+
+    emit!(MinerCreateEvent {
+        authority: miner.authority,
+        quarry: miner.quarry,
+        miner: miner.key(),
+    });
+
+    Ok(())
 }
 
 impl<'info> Validate<'info> for CreateMiner<'info> {

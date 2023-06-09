@@ -6,7 +6,6 @@
 #![deny(clippy::unwrap_used)]
 
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program;
 use vipers::prelude::*;
 
 mod instructions;
@@ -113,7 +112,7 @@ pub mod gauge {
         trigger_next_epoch::handler(ctx)
     }
 
-    /// Synchronizes the [quarry_mine::Quarry] with the relevant [EpochGauge]. Permissionless.
+    /// Synchronizes the [quarry::Quarry] with the relevant [EpochGauge]. Permissionless.
     #[access_control(ctx.accounts.validate())]
     pub fn sync_gauge(ctx: Context<SyncGauge>) -> Result<()> {
         sync_gauge::handler(ctx)
@@ -127,7 +126,7 @@ pub mod gauge {
 
     /// Closes an [EpochGaugeVote], sending lamports to a user-specified address.
     ///
-    /// Only the [locked_voter::Escrow::vote_delegate] may call this.
+    /// Only the [voter::Escrow::vote_delegate] may call this.
     #[access_control(ctx.accounts.validate())]
     pub fn close_epoch_gauge_vote(
         ctx: Context<CloseEpochGaugeVote>,

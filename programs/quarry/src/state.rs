@@ -3,7 +3,7 @@
 use crate::*;
 
 /// Controls token rewards distribution to all [Quarry]s.
-/// The [Rewarder] is also the [quarry_mint_wrapper::Minter] registered to the [quarry_mint_wrapper::MintWrapper].
+/// The [Rewarder] is also the [minter::Minter] registered to the [minter::MintWrapper].
 #[account]
 #[derive(Copy, Default, Debug)]
 pub struct Rewarder {
@@ -30,23 +30,16 @@ pub struct Rewarder {
     /// Mint of the rewards token for this [Rewarder].
     pub rewards_token_mint: Pubkey,
 
-    /// Claim fees are placed in this account.
-    pub claim_fee_token_account: Pubkey,
-    /// Maximum amount of tokens to send to the Quarry DAO on each claim,
-    /// in terms of milliBPS. 1,000 milliBPS = 1 BPS = 0.01%
-    /// This is stored on the [Rewarder] to ensure that the fee will
-    /// not exceed this in the future.
-    pub max_claim_fee_millibps: u64,
-
     /// Authority allowed to pause a [Rewarder].
     pub pause_authority: Pubkey,
-    /// If true, all instructions on the [Rewarder] are paused other than [quarry_mine::unpause].
+    /// If true, all instructions on the [Rewarder] are paused other than [quarry::unpause].
     pub is_paused: bool,
+
+    // operator can set rewards share, normally it is gauge factory
+    pub operator: Pubkey,
 }
 
 impl Rewarder {
-    pub const LEN: usize = 32 + 1 + 32 + 32 + 2 + 8 + 8 + 32 + 32 + 32 + 8 + 32 + 1;
-
     /// Asserts that this [Rewarder] is not paused.
     pub fn assert_not_paused(&self) -> Result<()> {
         invariant!(!self.is_paused, Paused);
@@ -86,10 +79,6 @@ pub struct Quarry {
     pub num_miners: u64,
 }
 
-impl Quarry {
-    pub const LEN: usize = 32 + 32 + 1 + 2 + 1 + 8 + 8 + 16 + 8 + 8 + 8 + 8;
-}
-
 /// An account that has staked tokens into a [Quarry].
 #[account]
 #[derive(Copy, Default, Debug)]
@@ -116,7 +105,7 @@ pub struct Miner {
     /// On the first [quarry_mine::stake_tokens], the [Quarry]#update_rewards_and_miner
     /// method is called, which updates this checkpoint to the current quarry value.
     ///
-    /// On a [quarry_mine::claim_rewards], the difference in checkpoints is used to calculate
+    /// On a [quarry::claim_rewards], the difference in checkpoints is used to calculate
     /// the amount of tokens owed.
     pub rewards_per_token_paid: u128,
 
@@ -125,31 +114,4 @@ pub struct Miner {
 
     /// Index of the [Miner].
     pub index: u64,
-}
-
-impl Miner {
-    pub const LEN: usize = 32 + 32 + 1 + 32 + 8 + 16 + 8 + 8;
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_rewarder_len() {
-        assert_eq!(
-            Rewarder::default().try_to_vec().unwrap().len(),
-            Rewarder::LEN
-        );
-    }
-
-    #[test]
-    fn test_quarry_len() {
-        assert_eq!(Quarry::default().try_to_vec().unwrap().len(), Quarry::LEN);
-    }
-
-    #[test]
-    fn test_miner_len() {
-        assert_eq!(Miner::default().try_to_vec().unwrap().len(), Miner::LEN);
-    }
 }

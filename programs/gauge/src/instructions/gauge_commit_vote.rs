@@ -30,7 +30,7 @@ pub struct GaugeCommitVote<'info> {
             epoch_gauge_voter.voting_epoch.to_le_bytes().as_ref(),
         ],
         bump,
-        space = 8 + EpochGaugeVote::LEN,
+        space = 8 + std::mem::size_of::<EpochGaugeVote>(),
         payer = payer
     )]
     pub epoch_gauge_vote: Account<'info, EpochGaugeVote>,
@@ -124,13 +124,13 @@ impl<'info> Validate<'info> for GaugeCommitVote<'info> {
 #[event]
 pub struct CommitGaugeVoteEvent {
     #[index]
-    /// The [Gaugemeister].
+    /// The [GaugeFactory].
     pub gauge_factory: Pubkey,
     #[index]
     /// The [Gauge].
     pub gauge: Pubkey,
     #[index]
-    /// The [quarry_mine::Quarry] being voted on.
+    /// The [quarry::Quarry] being voted on.
     pub quarry: Pubkey,
     #[index]
     /// Owner of the Escrow of the [GaugeVoter].

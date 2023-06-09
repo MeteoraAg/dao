@@ -4,6 +4,9 @@ members = [
     "programs/govern",
     "programs/smart-wallet",
     "programs/voter",
+    "programs/gauge",
+    "programs/quarry",
+    "programs/minter",
     "cli/*"
 ]
 

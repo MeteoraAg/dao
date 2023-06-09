@@ -1,16 +1,8 @@
 [package]
 name = "merkle-distributor"
-version = "0.3.5"
-description = "A Solana program for distributing tokens according to a Merkle root."
+version = "0.1.0"
 edition = "2021"
-homepage = "https://saber.so"
-repository = "https://github.com/saber-hq/merkle-distributor"
-authors = [
-    "Michael Huang <michaelhly@gmail.com>",
-    "Ian Macalinao <ian@ship.capital>"
-]
-license = "GPL-3.0"
-keywords = ["solana", "airdrop", "token", "saber"]
+description = "A Solana program for distributing tokens according to a Merkle root."
 
 [lib]
 crate-type = ["cdylib", "lib"]

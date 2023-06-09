@@ -1,7 +1,5 @@
 //! Enables a [Gauge].
 
-use quarry_operator::Operator;
-
 use crate::*;
 
 /// Accounts for [gauge::sync_gauge].
@@ -17,23 +15,17 @@ pub struct SyncGauge<'info> {
     /// The [EpochGauge].
     pub epoch_gauge: Account<'info, EpochGauge>,
 
-    /// [Gauge::quarry].
+    /// [quarry::Quarry].
     #[account(mut)]
     pub quarry: Account<'info, quarry::Quarry>,
 
-    /// [Gaugemeister::operator].
-    #[account(mut)]
-    pub operator: Account<'info, Operator>,
-
-    /// [Gaugemeister::rewarder].
+    /// [GaugeFactory::rewarder].
     /// CHECK: validated by key, not deserialized to save CU's.
     #[account(mut)]
     pub rewarder: UncheckedAccount<'info>,
 
-    /// [quarry_mine] program.
-    pub quarry_mine_program: Program<'info, quarry_mine::program::QuarryMine>,
-    /// [quarry_operator] program.
-    pub quarry_operator_program: Program<'info, quarry_operator::program::QuarryOperator>,
+    /// [quarry] program.
+    pub quarry_program: Program<'info, quarry::program::Quarry>,
 }
 
 /// Emitted on [gauge::sync_gauge].
@@ -42,15 +34,15 @@ pub struct SyncGaugeEvent {
     /// The [Gauge].
     #[index]
     pub gauge: Pubkey,
-    /// The [Gaugemeister].
+    /// The [GaugeFactory].
     #[index]
     pub gauge_factory: Pubkey,
     /// The epoch synced.
     #[index]
     pub epoch: u32,
-    /// The previous [quarry_mine::Quarry::rewards_share].
+    /// The previous [quarry::Quarry::rewards_share].
     pub previous_share: u64,
-    /// The new [quarry_mine::Quarry::rewards_share].
+    /// The new [quarry::Quarry::rewards_share].
     pub new_share: u64,
 }
 
@@ -58,21 +50,18 @@ impl<'info> SyncGauge<'info> {
     fn set_rewards_share(&self) -> Result<()> {
         // Only call CPI if the rewards share actually changed.
         if self.quarry.rewards_share != self.epoch_gauge.total_power {
-            let gm_seeds: &[&[&[u8]]] = gaugemeister_seeds!(self.gaugemeister);
-            quarry_operator::cpi::delegate_set_rewards_share(
-                CpiContext::new(
-                    self.quarry_operator_program.to_account_info(),
-                    quarry_operator::cpi::accounts::DelegateSetRewardsShare {
-                        with_delegate: quarry_operator::cpi::accounts::WithDelegate {
-                            operator: self.operator.to_account_info(),
-                            delegate: self.gauge_factory.to_account_info(),
-                            rewarder: self.rewarder.to_account_info(),
-                            quarry_mine_program: self.quarry_mine_program.to_account_info(),
-                        },
+            let signer_seeds: &[&[&[u8]]] = gauge_factory_seeds!(self.gauge_factory);
+
+            quarry::cpi::set_rewards_share(
+                CpiContext::new_with_signer(
+                    self.quarry_program.to_account_info(),
+                    quarry::cpi::accounts::SetRewardsShare {
+                        authority: self.gauge_factory.to_account_info(), // gauge_factory is operator of rewarder
+                        rewarder: self.rewarder.to_account_info(),
                         quarry: self.quarry.to_account_info(),
                     },
-                )
-                .with_signer(gm_seeds),
+                    signer_seeds,
+                ),
                 self.epoch_gauge.total_power,
             )?;
         }
@@ -98,12 +87,10 @@ impl<'info> Validate<'info> for SyncGauge<'info> {
     fn validate(&self) -> Result<()> {
         assert_keys_eq!(self.gauge_factory, self.gauge.gauge_factory);
         assert_keys_eq!(self.gauge_factory.rewarder, self.rewarder);
-        assert_keys_eq!(self.gauge_factory.operator, self.operator);
         assert_keys_eq!(self.epoch_gauge.gauge, self.gauge);
 
         assert_keys_eq!(self.quarry, self.gauge.quarry);
         assert_keys_eq!(self.quarry.rewarder, self.rewarder);
-        assert_keys_eq!(self.operator.rewarder, self.rewarder);
 
         invariant!(
             self.gauge_factory.current_rewards_epoch != 0,

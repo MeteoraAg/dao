@@ -1,14 +1,14 @@
-//! Creates the [Gaugemeister].
+//! Creates the [GaugeFactory].
 
 use num_traits::ToPrimitive;
 use vipers::prelude::*;
 
 use crate::*;
 
-/// Accounts for [gauge::create_gaugemeister].
+/// Accounts for [gauge::create_gauge_factory].
 #[derive(Accounts)]
 pub struct CreateGaugeFactory<'info> {
-    /// The [Gaugemeister] to be created.
+    /// The [GaugeFactory] to be created.
     #[account(
         init,
         seeds = [
@@ -24,8 +24,9 @@ pub struct CreateGaugeFactory<'info> {
     /// Base.
     pub base: Signer<'info>,
 
-    /// The Quarry [quarry_operator::Operator].
-    // pub operator: Account<'info, quarry_operator::Operator>,
+    /// The Quarry [minter::Rewarder].
+    /// CHECK: rewarder of token
+    pub rewarder: UncheckedAccount<'info>,
 
     /// [voter::Locker] which determines gauge weights.
     pub locker: Account<'info, voter::Locker>,
@@ -53,9 +54,9 @@ pub fn handler(
     let gauge_factory = &mut ctx.accounts.gauge_factory;
 
     gauge_factory.base = ctx.accounts.base.key();
-    gauge_factory.bump = *unwrap_int!(ctx.bumps.get("GaugeFactory"));
+    gauge_factory.bump = *unwrap_int!(ctx.bumps.get("gauge_factory"));
 
-    // gaugemeister.rewarder = ctx.accounts.operator.rewarder;
+    gauge_factory.rewarder = ctx.accounts.rewarder.key();
     // gaugemeister.operator = ctx.accounts.operator.key();
     gauge_factory.locker = ctx.accounts.locker.key();
 
@@ -66,14 +67,9 @@ pub fn handler(
 
     gauge_factory.next_epoch_starts_at = first_epoch_starts_at;
 
-    // gaugemeister.locker_token_mint = ctx.accounts.locker.token_mint;
-    // gaugemeister.locker_governor = ctx.accounts.locker.governor;
-
     emit!(CreateGaugeFactoryEvent {
         gauge_factory: gauge_factory.key(),
-        // rewarder: gaugemeister.rewarder,
-        // locker_token_mint: ctx.accounts.locker.token_mint,
-        // locker_governor: ctx.accounts.locker.governor,
+        rewarder: gauge_factory.rewarder,
         locker: ctx.accounts.locker.key(),
         first_rewards_epoch: first_epoch_starts_at,
         foreman,
@@ -88,21 +84,17 @@ impl<'info> Validate<'info> for CreateGaugeFactory<'info> {
     }
 }
 
-/// Event called in [gauge::create_gaugemeister].
+/// Event called in [gauge::create_gauge_factory].
 #[event]
 pub struct CreateGaugeFactoryEvent {
-    /// The [Gaugemeister] being created.
+    /// The [GaugeFactory] being created.
     #[index]
     pub gauge_factory: Pubkey,
-    // #[index]
-    // pub rewarder: Pubkey,
-    // /// Mint of the token that must be locked in the [Locker].
-    // pub locker_token_mint: Pubkey,
-    // /// Governor associated with the [Locker].
-    // pub locker_governor: Pubkey,
+    #[index]
+    pub rewarder: Pubkey,
     /// Locker
     pub locker: Pubkey,
-    /// Account which may enable/disable gauges on the [Gaugemeister].
+    /// Account which may enable/disable gauges on the [GaugeFactory].
     pub foreman: Pubkey,
     /// The first rewards epoch.
     pub first_rewards_epoch: u64,

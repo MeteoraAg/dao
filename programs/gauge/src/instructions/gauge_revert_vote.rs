@@ -96,7 +96,7 @@ pub struct RevertGaugeVoteEvent {
     /// The [Gauge].
     pub gauge: Pubkey,
     #[index]
-    /// The [quarry_mine::Quarry] being voted on.
+    /// The [quarry::Quarry] being voted on.
     pub quarry: Pubkey,
     #[index]
     /// Owner of the Escrow of the [GaugeVoter].

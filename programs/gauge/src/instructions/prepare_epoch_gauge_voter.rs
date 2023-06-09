@@ -61,7 +61,7 @@ pub fn handler(ctx: Context<PrepareEpochGaugeVoter>) -> Result<()> {
 
     emit!(PrepareEpochGaugeVoterEvent {
         gauge_factory: ctx.accounts.gauge_factory.key(),
-        // rewarder: ctx.accounts.gaugemeister.rewarder,
+        rewarder: ctx.accounts.gauge_factory.rewarder,
         locker: ctx.accounts.locker.key(),
         gauge_voter_owner: ctx.accounts.gauge_voter.owner,
         voting_epoch,
@@ -90,10 +90,10 @@ pub struct PrepareEpochGaugeVoterEvent {
     /// The [GaugeFactory].
     pub gauge_factory: Pubkey,
     #[index]
-    // /// The [Rewarder]
-    // pub rewarder: Pubkey,
+    /// The [Rewarder]
+    pub rewarder: Pubkey,
     #[index]
-    /// The assocated [locked_voter::Locker].
+    /// The assocated [voter::Locker].
     pub locker: Pubkey,
     #[index]
     /// The owner of the [GaugeVoter].

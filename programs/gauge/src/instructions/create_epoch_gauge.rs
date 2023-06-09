@@ -4,7 +4,7 @@ use crate::*;
 
 /// Accounts for [gauge::create_epoch_gauge].
 #[derive(Accounts)]
-#[instruction(_bump: u8, voting_epoch: u32)]
+#[instruction(voting_epoch: u32)]
 pub struct CreateEpochGauge<'info> {
     /// The [Gauge] to create an [EpochGauge] of.
     pub gauge: Account<'info, Gauge>,
@@ -18,7 +18,7 @@ pub struct CreateEpochGauge<'info> {
             voting_epoch.to_le_bytes().as_ref()
         ],
         bump,
-        space = 8 + EpochGauge::LEN,
+        space = 8 + std::mem::size_of::<EpochGauge>(),
         payer = payer
     )]
     pub epoch_gauge: Account<'info, EpochGauge>,
@@ -59,7 +59,7 @@ pub struct EpochGaugeCreateEvent {
     /// The [GaugeFactory].
     pub gauge_factory: Pubkey,
     #[index]
-    /// The [quarry_mine::Quarry] being voted on.
+    /// The [quarry::Quarry] being voted on.
     pub quarry: Pubkey,
     /// The epoch associated with this [EpochGauge].
     pub voting_epoch: u32,

@@ -16,7 +16,7 @@ pub struct CreateGaugeVote<'info> {
             gauge.key().as_ref(),
         ],
         bump,
-        space = 8 + std::mem::size_of::<GaugeFactory>(),
+        space = 8 + std::mem::size_of::<GaugeVote>(),
         payer = payer
     )]
     pub gauge_vote: Account<'info, GaugeVote>,
@@ -69,7 +69,7 @@ pub struct GaugeVoteCreateEvent {
     /// The [Gauge].
     pub gauge: Pubkey,
     #[index]
-    /// The [quarry_mine::Quarry] being voted on.
+    /// The [quarry::Quarry] being voted on.
     pub quarry: Pubkey,
     #[index]
     /// Owner of the Escrow of the [GaugeVoter].

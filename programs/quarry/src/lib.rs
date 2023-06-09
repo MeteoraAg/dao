@@ -22,8 +22,6 @@ use payroll::Payroll;
 pub use state::*;
 use vipers::prelude::*;
 
-pub mod account_validators;
-pub mod addresses;
 pub mod payroll;
 pub mod quarry_state;
 pub mod rewarder;
@@ -38,24 +36,6 @@ declare_id!("quaJeeoTrxSszHnpzNQrtFoF1kcnfMiSWuYpk8ddobB");
 /// Maximum number of tokens that can be rewarded by a [Rewarder] per year.
 pub const MAX_ANNUAL_REWARDS_RATE: u64 = u64::MAX >> 3;
 
-/// The fees of new [Rewarder]s: 1,000 milliBPS = 1 BP or 0.01%.
-/// This may be changed by governance in the future via program upgrade.
-pub const DEFAULT_CLAIM_FEE_MILLIBPS: u64 = 1_000;
-
-/// The maximum number of basis points possible.
-pub const MAX_BPS: u64 = 10_000;
-
-// #[cfg(not(feature = "no-entrypoint"))]
-// solana_security_txt::security_txt! {
-//     name: "Quarry Mine",
-//     project_url: "https://quarry.so",
-//     contacts: "email:team@quarry.so",
-//     policy: "https://github.com/QuarryProtocol/quarry/blob/master/SECURITY.md",
-
-//     source_code: "https://github.com/QuarryProtocol/quarry",
-//     auditors: "Quantstamp"
-// }
-
 /// Program for [quarry].
 #[program]
 pub mod quarry {
@@ -67,32 +47,35 @@ pub mod quarry {
 
     /// Creates a new [Rewarder].
     #[access_control(ctx.accounts.validate())]
-    pub fn new_rewarder(ctx: Context<NewRewarderV2>) -> Result<()> {
-        instructions::new_rewarder::handler(ctx)
+    pub fn new_rewarder(ctx: Context<NewRewarder>) -> Result<()> {
+        new_rewarder::handler(ctx)
+    }
+
+    /// Set operator [Rewarder].
+    #[access_control(ctx.accounts.validate())]
+    pub fn set_operator(
+        ctx: Context<MutableRewarderWithAuthority>,
+        operator: Pubkey,
+    ) -> Result<()> {
+        mutable_rewarder_with_authority::handler_set_operator(ctx, operator)
     }
 
     /// Sets the pause authority.
     #[access_control(ctx.accounts.validate())]
     pub fn set_pause_authority(ctx: Context<SetPauseAuthority>) -> Result<()> {
-        let rewarder = &mut ctx.accounts.auth.rewarder;
-        rewarder.pause_authority = ctx.accounts.new_pause_authority.key();
-        Ok(())
+        set_pause_authority::handler(ctx)
     }
 
     /// Pauses the [Rewarder].
     #[access_control(ctx.accounts.validate())]
     pub fn pause(ctx: Context<MutableRewarderWithPauseAuthority>) -> Result<()> {
-        let rewarder = &mut ctx.accounts.rewarder;
-        rewarder.is_paused = true;
-        Ok(())
+        mutable_rewarder_with_pause_authority::handler(ctx, true)
     }
 
     /// Unpauses the [Rewarder].
     #[access_control(ctx.accounts.validate())]
     pub fn unpause(ctx: Context<MutableRewarderWithPauseAuthority>) -> Result<()> {
-        let rewarder = &mut ctx.accounts.rewarder;
-        rewarder.is_paused = false;
-        Ok(())
+        mutable_rewarder_with_pause_authority::handler(ctx, false)
     }
 
     /// Transfers the [Rewarder] authority to a different account.
@@ -101,40 +84,19 @@ pub mod quarry {
         ctx: Context<TransferAuthority>,
         new_authority: Pubkey,
     ) -> Result<()> {
-        let rewarder = &mut ctx.accounts.rewarder;
-        rewarder.pending_authority = new_authority;
-        Ok(())
+        transfer_authority::handler(ctx, new_authority)
     }
 
     /// Accepts the authority to become the new rewarder.
     #[access_control(ctx.accounts.validate())]
     pub fn accept_authority(ctx: Context<AcceptAuthority>) -> Result<()> {
-        let rewarder = &mut ctx.accounts.rewarder;
-        let next_authority = rewarder.pending_authority;
-        rewarder.authority = next_authority;
-        rewarder.pending_authority = Pubkey::default();
-        Ok(())
+        accept_authority::handler(ctx)
     }
 
     /// Sets the amount of reward tokens distributed to all [Quarry]s per day.
     #[access_control(ctx.accounts.validate())]
     pub fn set_annual_rewards(ctx: Context<SetAnnualRewards>, new_rate: u64) -> Result<()> {
-        invariant!(
-            new_rate <= MAX_ANNUAL_REWARDS_RATE,
-            MaxAnnualRewardsRateExceeded
-        );
-        let rewarder = &mut ctx.accounts.auth.rewarder;
-        let previous_rate = rewarder.annual_rewards_rate;
-        rewarder.annual_rewards_rate = new_rate;
-
-        let current_ts = Clock::get()?.unix_timestamp;
-        emit!(RewarderAnnualRewardsUpdateEvent {
-            previous_rate,
-            new_rate,
-            timestamp: current_ts,
-        });
-
-        Ok(())
+        set_annual_rewards::handler(ctx, new_rate)
     }
 
     // --------------------------------
@@ -142,65 +104,29 @@ pub mod quarry {
     // --------------------------------
 
     /// Creates a new [Quarry].
-    /// This may only be called by the [Rewarder]::authority.
-    ///
-    /// The V2 variant removes the need for supplying the bump and clock.
+    /// This may only be called by the [Rewarder]::authority.    
     #[access_control(ctx.accounts.validate())]
     pub fn create_quarry(ctx: Context<CreateQuarry>) -> Result<()> {
-        instructions::create_quarry::handler(ctx)
+        create_quarry::handler(ctx)
     }
 
     /// Sets the rewards share of a quarry.
     #[access_control(ctx.accounts.validate())]
     pub fn set_rewards_share(ctx: Context<SetRewardsShare>, new_share: u64) -> Result<()> {
-        let rewarder = &mut ctx.accounts.auth.rewarder;
-        let quarry = &mut ctx.accounts.quarry;
-        rewarder.total_rewards_shares = unwrap_int!(rewarder
-            .total_rewards_shares
-            .checked_add(new_share)
-            .and_then(|v| v.checked_sub(quarry.rewards_share)));
-
-        quarry.rewards_share = new_share;
-        // Do not update annual_rewards_rate here. Just wait for the update_quarry_rewards call
-        // because rewarder.total_rewards_shares may change with other quarry share changes
-        // and quarry.annual_rewards_rate calculated here will become invalid.
-        // The correct share update procedure is calling all set_rewards_share
-        // first (with set_annual_rewards if needed) and update_quarry_rewards
-        // for each quarry to finalize changes.
-        // TODO: because update_quarry_rewards is permissionless better
-        // to add protection from calling it after admin started to change the rates
-        // and commit_changes instruction making possible to call update_quarry_rewards again
-
-        Ok(())
+        set_rewards_share::handler(ctx, new_share)
     }
 
     /// Sets the famine, which stops rewards.
     #[access_control(ctx.accounts.validate())]
     pub fn set_famine(ctx: Context<SetFamine>, famine_ts: i64) -> Result<()> {
-        let quarry = &mut ctx.accounts.quarry;
-        quarry.famine_ts = famine_ts;
-
-        Ok(())
+        set_famine::handler(ctx, famine_ts)
     }
 
     /// Synchronizes quarry rewards with the rewarder.
     /// Anyone can call this.
     #[access_control(ctx.accounts.validate())]
     pub fn update_quarry_rewards(ctx: Context<UpdateQuarryRewards>) -> Result<()> {
-        let current_ts = Clock::get()?.unix_timestamp;
-        let rewarder = &ctx.accounts.rewarder;
-        let payroll: Payroll = (*ctx.accounts.quarry).into();
-        let quarry = &mut ctx.accounts.quarry;
-        quarry.update_rewards_internal(current_ts, rewarder, &payroll)?;
-
-        emit!(QuarryRewardsUpdateEvent {
-            token_mint: quarry.token_mint_key,
-            annual_rewards_rate: quarry.annual_rewards_rate,
-            rewards_share: quarry.rewards_share,
-            timestamp: current_ts,
-        });
-
-        Ok(())
+        update_quarry_rewards::handler(ctx)
     }
 
     /// --------------------------------
@@ -210,383 +136,28 @@ pub mod quarry {
     /// Creates a [Miner] for the given authority.
     ///
     /// Anyone can call this; this is an associated account.
-    #[deprecated(since = "5.0.0", note = "Use `create_miner_v2` instead.")]
     #[access_control(ctx.accounts.validate())]
-    pub fn create_miner(ctx: Context<CreateMiner>, _bump: u8) -> Result<()> {
-        instructions::create_miner::handler(ctx)
-    }
-
-    /// Creates a [Miner] for the given authority.
-    ///
-    /// Anyone can call this; this is an associated account.
-    ///
-    /// The V2 variant removes the need for supplying the bump.
-    #[access_control(ctx.accounts.validate())]
-    pub fn create_miner_v2(ctx: Context<CreateMiner>) -> Result<()> {
-        instructions::create_miner::handler(ctx)
+    pub fn create_miner(ctx: Context<CreateMiner>) -> Result<()> {
+        create_miner::handler(ctx)
     }
 
     /// Claims rewards for the [Miner].
-    ///
-    /// The V2 variant removes 2 accounts from the [crate::quarry_mine::claim_rewards] instruction.
     #[access_control(ctx.accounts.validate())]
     pub fn claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
-        instructions::claim_rewards::handler(ctx)
+        claim_rewards::handler(ctx)
     }
 
     /// Stakes tokens into the [Miner].
     #[access_control(ctx.accounts.validate())]
     pub fn stake_tokens(ctx: Context<UserStake>, amount: u64) -> Result<()> {
-        if amount == 0 {
-            // noop
-            return Ok(());
-        }
-
-        let quarry = &mut ctx.accounts.quarry;
-        let clock = Clock::get()?;
-        quarry.process_stake_action_internal(
-            StakeAction::Stake,
-            clock.unix_timestamp,
-            &ctx.accounts.rewarder,
-            &mut ctx.accounts.miner,
-            amount,
-        )?;
-
-        let cpi_accounts = Transfer {
-            from: ctx.accounts.token_account.to_account_info(),
-            to: ctx.accounts.miner_vault.to_account_info(),
-            authority: ctx.accounts.authority.to_account_info(),
-        };
-        let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_context = CpiContext::new(cpi_program, cpi_accounts);
-        // Transfer LP tokens to quarry vault
-        token::transfer(cpi_context, amount)?;
-
-        emit!(StakeEvent {
-            timestamp: clock.unix_timestamp,
-            authority: ctx.accounts.authority.key(),
-            amount,
-            token: ctx.accounts.token_account.mint,
-        });
-        Ok(())
+        user_stake::handler_stake_tokens(ctx, amount)
     }
 
     /// Withdraws tokens from the [Miner].
     #[access_control(ctx.accounts.validate())]
     pub fn withdraw_tokens(ctx: Context<UserStake>, amount: u64) -> Result<()> {
-        if amount == 0 {
-            // noop
-            return Ok(());
-        }
-        invariant!(
-            amount <= ctx.accounts.miner_vault.amount,
-            InsufficientBalance
-        );
-
-        let clock = Clock::get()?;
-        let quarry = &mut ctx.accounts.quarry;
-        quarry.process_stake_action_internal(
-            StakeAction::Withdraw,
-            clock.unix_timestamp,
-            &ctx.accounts.rewarder,
-            &mut ctx.accounts.miner,
-            amount,
-        )?;
-
-        // Sign a transfer instruction as the [Miner]
-        let miner_seeds = &[
-            b"Miner".as_ref(),
-            ctx.accounts.miner.quarry.as_ref(),
-            ctx.accounts.miner.authority.as_ref(),
-            &[ctx.accounts.miner.bump],
-        ];
-        let signer_seeds = &[&miner_seeds[..]];
-        let cpi_accounts = token::Transfer {
-            from: ctx.accounts.miner_vault.to_account_info(),
-            to: ctx.accounts.token_account.to_account_info(),
-            authority: ctx.accounts.miner.to_account_info(),
-        };
-        let cpi_ctx = CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            cpi_accounts,
-            signer_seeds,
-        );
-        // Transfer out LP tokens from quarry vault
-        token::transfer(cpi_ctx, amount)?;
-
-        emit!(WithdrawEvent {
-            timestamp: clock.unix_timestamp,
-            authority: ctx.accounts.authority.key(),
-            amount,
-            token: ctx.accounts.token_account.mint,
-        });
-        Ok(())
+        user_stake::handler_withdraw_tokens(ctx, amount)
     }
-
-    /// Withdraw tokens from a [Miner]-owned token account that is not the [Miner::token_vault_key].
-    /// This is useful for if tokens are sent directly to a [Miner].
-    ///
-    /// Only the [Miner::authority] may call this.
-    #[access_control(ctx.accounts.validate())]
-    pub fn rescue_tokens(ctx: Context<RescueTokens>) -> Result<()> {
-        instructions::rescue_tokens::handler(ctx)
-    }
-
-    // --------------------------------
-    // Protocol Functions
-    // --------------------------------
-
-    /// Extracts fees to the Quarry DAO.
-    /// This can be called by anyone.
-    #[access_control(ctx.accounts.validate())]
-    pub fn extract_fees(ctx: Context<ExtractFees>) -> Result<()> {
-        let seeds = gen_rewarder_signer_seeds!(ctx.accounts.rewarder);
-        let signer_seeds = &[&seeds[..]];
-
-        // Transfer the tokens to the DAO address.
-        token::transfer(
-            CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
-                token::Transfer {
-                    from: ctx.accounts.claim_fee_token_account.to_account_info(),
-                    to: ctx.accounts.fee_to_token_account.to_account_info(),
-                    authority: ctx.accounts.rewarder.to_account_info(),
-                },
-                signer_seeds,
-            ),
-            ctx.accounts.claim_fee_token_account.amount,
-        )?;
-
-        Ok(())
-    }
-}
-
-/// --------------------------------
-/// Context Structs
-/// --------------------------------
-
-/* Rewarder contexts */
-
-/// Accounts for [quarry_mine::set_pause_authority].
-#[derive(Accounts)]
-pub struct SetPauseAuthority<'info> {
-    /// [Rewarder].
-    pub auth: MutableRewarderWithAuthority<'info>,
-
-    /// The pause authority.
-    /// CHECK: OK
-    pub new_pause_authority: UncheckedAccount<'info>,
-}
-
-/// Accounts for [quarry_mine::transfer_authority].
-#[derive(Accounts)]
-pub struct TransferAuthority<'info> {
-    /// Authority of the rewarder.
-    pub authority: Signer<'info>,
-
-    /// Rewarder of the farm.
-    #[account(mut)]
-    pub rewarder: Account<'info, Rewarder>,
-}
-
-/// Accounts for [quarry_mine::accept_authority].
-#[derive(Accounts)]
-pub struct AcceptAuthority<'info> {
-    /// Authority of the next rewarder.
-    pub authority: Signer<'info>,
-
-    /// Rewarder of the farm.
-    #[account(mut)]
-    pub rewarder: Account<'info, Rewarder>,
-}
-
-/// Mutable [Rewarder] that requires the authority to be a signer.
-#[derive(Accounts, Clone)]
-pub struct MutableRewarderWithAuthority<'info> {
-    /// Authority of the rewarder.
-    pub authority: Signer<'info>,
-
-    /// Rewarder of the farm.
-    #[account(mut, has_one = authority @ ErrorCode::Unauthorized)]
-    pub rewarder: Account<'info, Rewarder>,
-}
-
-/// Read-only [Rewarder] that requires the authority to be a signer.
-#[derive(Accounts)]
-pub struct ReadOnlyRewarderWithAuthority<'info> {
-    /// Authority of the rewarder.
-    pub authority: Signer<'info>,
-
-    /// [Rewarder].
-    #[account(has_one = authority)]
-    pub rewarder: Account<'info, Rewarder>,
-}
-
-/// Accounts for [quarry_mine::set_annual_rewards].
-#[derive(Accounts)]
-pub struct SetAnnualRewards<'info> {
-    /// [Rewarder],
-    pub auth: MutableRewarderWithAuthority<'info>,
-}
-
-/* Quarry contexts */
-
-/// Accounts for [quarry_mine::set_famine].
-#[derive(Accounts)]
-pub struct SetFamine<'info> {
-    /// [Rewarder] of the [Quarry].
-    pub auth: ReadOnlyRewarderWithAuthority<'info>,
-
-    /// [Quarry] updated.
-    #[account(mut, constraint = quarry.rewarder == auth.rewarder.key())]
-    pub quarry: Account<'info, Quarry>,
-}
-
-/// Accounts for [quarry_mine::set_rewards_share].
-#[derive(Accounts)]
-pub struct SetRewardsShare<'info> {
-    /// [Rewarder] of the [Quarry].
-    pub auth: MutableRewarderWithAuthority<'info>,
-
-    /// [Quarry] updated.
-    #[account(mut)]
-    pub quarry: Account<'info, Quarry>,
-}
-
-/// Accounts for [quarry_mine::update_quarry_rewards].
-#[derive(Accounts)]
-pub struct UpdateQuarryRewards<'info> {
-    /// [Quarry].
-    #[account(mut)]
-    pub quarry: Account<'info, Quarry>,
-
-    /// [Rewarder].
-    pub rewarder: Account<'info, Rewarder>,
-}
-
-/* Miner contexts */
-
-/// Staking accounts
-///
-/// This accounts struct is always used in the context of the user authority
-/// staking into an account. This is NEVER used by an admin.
-///
-/// Validation should be extremely conservative.
-#[derive(Accounts, Clone)]
-pub struct UserStake<'info> {
-    /// Miner authority (i.e. the user).
-    pub authority: Signer<'info>,
-
-    /// Miner.
-    #[account(mut)]
-    pub miner: Account<'info, Miner>,
-
-    /// Quarry to claim from.
-    #[account(mut)]
-    pub quarry: Account<'info, Quarry>,
-
-    /// Vault of the miner.
-    #[account(mut)]
-    pub miner_vault: Account<'info, TokenAccount>,
-
-    /// User's staked token account
-    #[account(mut)]
-    pub token_account: Account<'info, TokenAccount>,
-
-    /// Token program
-    pub token_program: Program<'info, Token>,
-
-    /// Rewarder
-    pub rewarder: Account<'info, Rewarder>,
-}
-
-/// Accounts for [quarry_mine::extract_fees].
-#[derive(Accounts)]
-pub struct ExtractFees<'info> {
-    /// Rewarder to extract fees from.
-    #[account(has_one = claim_fee_token_account)]
-    pub rewarder: Account<'info, Rewarder>,
-
-    /// [TokenAccount] which receives claim fees.
-    #[account(mut)]
-    pub claim_fee_token_account: Account<'info, TokenAccount>,
-
-    /// [TokenAccount] owned by the [addresses::FEE_TO].
-    /// Holds DAO claim fees.
-    #[account(mut)]
-    pub fee_to_token_account: Account<'info, TokenAccount>,
-
-    /// Token program
-    pub token_program: Program<'info, Token>,
-}
-
-/// Accounts for [quarry_mine::pause] and [quarry_mine::unpause].
-#[derive(Accounts)]
-pub struct MutableRewarderWithPauseAuthority<'info> {
-    /// Pause authority of the rewarder.
-    pub pause_authority: Signer<'info>,
-
-    /// Rewarder of the farm.
-    #[account(mut)]
-    pub rewarder: Account<'info, Rewarder>,
-}
-
-// --------------------------------
-// Events
-// --------------------------------
-
-/// Emitted when tokens are staked into a [Quarry].
-#[event]
-pub struct StakeEvent {
-    /// Authority staking.
-    #[index]
-    pub authority: Pubkey,
-    /// Mint of token staked.
-    #[index]
-    pub token: Pubkey,
-    /// Amount staked.
-    pub amount: u64,
-    /// When the event took place.
-    pub timestamp: i64,
-}
-
-/// Emitted when tokens are withdrawn from a [Quarry].
-#[event]
-pub struct WithdrawEvent {
-    /// Authority withdrawing.
-    #[index]
-    pub authority: Pubkey,
-    /// Mint of token withdrawn.
-    #[index]
-    pub token: Pubkey,
-    /// Amount withdrawn.
-    pub amount: u64,
-    /// When the event took place.
-    pub timestamp: i64,
-}
-
-/// Emitted when the daily rewards rate is updated.
-#[event]
-pub struct RewarderAnnualRewardsUpdateEvent {
-    /// Previous rate of rewards.
-    pub previous_rate: u64,
-    /// New rate of rewards.
-    pub new_rate: u64,
-    /// When the event took place.
-    pub timestamp: i64,
-}
-
-/// Emitted when a quarry's reward rate is updated.
-#[event]
-pub struct QuarryRewardsUpdateEvent {
-    /// [Mint] of the [Quarry] token.
-    pub token_mint: Pubkey,
-    /// New annual rewards rate
-    pub annual_rewards_rate: u64,
-    /// New rewards share.
-    pub rewards_share: u64,
-    /// When the event took place.
-    pub timestamp: i64,
 }
 
 /// Error Codes
@@ -608,8 +179,6 @@ pub enum ErrorCode {
     NotEnoughTokens,
     #[msg("Invalid timestamp.")]
     InvalidTimestamp,
-    #[msg("Invalid max claim fee.")]
-    InvalidMaxClaimFee,
     #[msg("Max annual rewards rate exceeded.")]
     MaxAnnualRewardsRateExceeded,
     #[msg("Rewarder is paused.")]

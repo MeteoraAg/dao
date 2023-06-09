@@ -19,5 +19,5 @@ test-bpf = []
 anchor-lang = "0.26.0"
 vipers = {path = "../../libs/vipers"}
 num-traits = "0.2"
-quarry = {path="../quarry", features=["no-entrypoint"]}
+quarry = {path="../quarry", features=["no-entrypoint", "cpi"]}
 voter = {path = "../voter", features=["no-entrypoint"]}

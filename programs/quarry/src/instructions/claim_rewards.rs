@@ -1,5 +1,55 @@
 use crate::*;
 
+/// ClaimRewards accounts
+#[derive(Accounts)]
+pub struct ClaimRewards<'info> {
+    /// Mint wrapper.
+    #[account(mut)]
+    pub mint_wrapper: Box<Account<'info, minter::MintWrapper>>,
+    /// Mint wrapper program.
+    pub mint_wrapper_program: Program<'info, minter::program::Minter>,
+    /// [minter::Minter] information.
+    #[account(mut)]
+    pub minter: Box<Account<'info, minter::Minter>>,
+
+    /// Mint of the rewards token.
+    #[account(mut)]
+    pub rewards_token_mint: Box<Account<'info, Mint>>,
+
+    /// Account to claim rewards for.
+    #[account(mut)]
+    pub rewards_token_account: Box<Account<'info, TokenAccount>>,
+
+    /// Claim accounts
+    pub claim: UserClaim<'info>,
+}
+
+/// Claim accounts
+///
+/// This accounts struct is always used in the context of the user authority
+/// staking into an account. This is NEVER used by an admin.
+///
+/// Validation should be extremely conservative.
+#[derive(Accounts, Clone)]
+pub struct UserClaim<'info> {
+    /// Miner authority (i.e. the user).
+    pub authority: Signer<'info>,
+
+    /// Miner.
+    #[account(mut)]
+    pub miner: Account<'info, Miner>,
+
+    /// Quarry to claim from.
+    #[account(mut)]
+    pub quarry: Account<'info, Quarry>,
+
+    /// Token program
+    pub token_program: Program<'info, Token>,
+
+    /// Rewarder
+    pub rewarder: Account<'info, Rewarder>,
+}
+
 pub fn handler(ctx: Context<ClaimRewards>) -> Result<()> {
     let miner = &mut ctx.accounts.claim.miner;
 
@@ -22,26 +72,11 @@ impl<'info> ClaimRewards<'info> {
             return Ok(());
         }
 
-        // Calculate rewards
-        let max_claim_fee_millibps = self.claim.rewarder.max_claim_fee_millibps;
-        invariant!(
-            max_claim_fee_millibps < MAX_BPS * DEFAULT_CLAIM_FEE_MILLIBPS,
-            InvalidMaxClaimFee
-        );
-        let max_claim_fee = unwrap_int!(::u128::mul_div_u64(
-            amount_claimable,
-            max_claim_fee_millibps,
-            MAX_BPS * DEFAULT_CLAIM_FEE_MILLIBPS
-        ));
-
-        let amount_claimable_minus_fees = unwrap_int!(amount_claimable.checked_sub(max_claim_fee));
-
         // Claim all rewards.
         miner.rewards_earned = 0;
 
         // Setup remaining variables
-        self.mint_claimed_tokens(amount_claimable_minus_fees)?;
-        self.mint_fees(max_claim_fee)?;
+        self.mint_claimed_tokens(amount_claimable)?;
 
         let now = Clock::get()?.unix_timestamp;
         emit!(ClaimEvent {
@@ -49,8 +84,7 @@ impl<'info> ClaimRewards<'info> {
             staked_token: self.claim.quarry.token_mint_key,
             timestamp: now,
             rewards_token: self.rewards_token_mint.key(),
-            amount: amount_claimable_minus_fees,
-            fees: max_claim_fee,
+            amount: amount_claimable,
         });
 
         Ok(())
@@ -61,16 +95,11 @@ impl<'info> ClaimRewards<'info> {
         self.perform_mint(&self.rewards_token_account, amount_claimable_minus_fees)
     }
 
-    /// Mints the fee tokens.
-    fn mint_fees(&self, claim_fee: u64) -> Result<()> {
-        self.perform_mint(&self.claim_fee_token_account, claim_fee)
-    }
-
     fn create_perform_mint_accounts(
         &self,
         destination: &Account<'info, TokenAccount>,
-    ) -> quarry_mint_wrapper::cpi::accounts::PerformMint<'info> {
-        quarry_mint_wrapper::cpi::accounts::PerformMint {
+    ) -> minter::cpi::accounts::PerformMint<'info> {
+        minter::cpi::accounts::PerformMint {
             mint_wrapper: self.mint_wrapper.to_account_info(),
             minter_authority: self.claim.rewarder.to_account_info(),
             token_mint: self.rewards_token_mint.to_account_info(),
@@ -87,7 +116,7 @@ impl<'info> ClaimRewards<'info> {
         let seeds = gen_rewarder_signer_seeds!(self.claim.rewarder);
         let signer_seeds = &[&seeds[..]];
 
-        quarry_mint_wrapper::cpi::perform_mint(
+        minter::cpi::perform_mint(
             CpiContext::new_with_signer(
                 self.mint_wrapper_program.to_account_info(),
                 claim_mint_accounts,
@@ -98,61 +127,7 @@ impl<'info> ClaimRewards<'info> {
     }
 }
 
-/// ClaimRewardsV2 accounts
-#[derive(Accounts)]
-pub struct ClaimRewardsV2<'info> {
-    /// Mint wrapper.
-    #[account(mut)]
-    pub mint_wrapper: Box<Account<'info, quarry_mint_wrapper::MintWrapper>>,
-    /// Mint wrapper program.
-    pub mint_wrapper_program: Program<'info, quarry_mint_wrapper::program::QuarryMintWrapper>,
-    /// [quarry_mint_wrapper::Minter] information.
-    #[account(mut)]
-    pub minter: Box<Account<'info, quarry_mint_wrapper::Minter>>,
-
-    /// Mint of the rewards token.
-    #[account(mut)]
-    pub rewards_token_mint: Box<Account<'info, Mint>>,
-
-    /// Account to claim rewards for.
-    #[account(mut)]
-    pub rewards_token_account: Box<Account<'info, TokenAccount>>,
-
-    /// Account to send claim fees to.
-    #[account(mut)]
-    pub claim_fee_token_account: Box<Account<'info, TokenAccount>>,
-
-    /// Claim accounts
-    pub claim: UserClaimV2<'info>,
-}
-
-/// Claim accounts
-///
-/// This accounts struct is always used in the context of the user authority
-/// staking into an account. This is NEVER used by an admin.
-///
-/// Validation should be extremely conservative.
-#[derive(Accounts, Clone)]
-pub struct UserClaimV2<'info> {
-    /// Miner authority (i.e. the user).
-    pub authority: Signer<'info>,
-
-    /// Miner.
-    #[account(mut)]
-    pub miner: Account<'info, Miner>,
-
-    /// Quarry to claim from.
-    #[account(mut)]
-    pub quarry: Account<'info, Quarry>,
-
-    /// Token program
-    pub token_program: Program<'info, Token>,
-
-    /// Rewarder
-    pub rewarder: Account<'info, Rewarder>,
-}
-
-impl<'info> Validate<'info> for ClaimRewardsV2<'info> {
+impl<'info> Validate<'info> for ClaimRewards<'info> {
     /// Validates a [ClaimRewards] accounts struct.
     fn validate(&self) -> Result<()> {
         self.claim.validate()?;
@@ -177,18 +152,11 @@ impl<'info> Validate<'info> for ClaimRewardsV2<'info> {
         // rewards_token_account validate
         assert_keys_eq!(self.rewards_token_account.mint, self.rewards_token_mint);
 
-        // claim_fee_token_account validate
-        assert_keys_eq!(
-            self.claim_fee_token_account,
-            self.claim.rewarder.claim_fee_token_account
-        );
-        assert_keys_eq!(self.claim_fee_token_account.mint, self.rewards_token_mint);
-
         Ok(())
     }
 }
 
-impl<'info> Validate<'info> for UserClaimV2<'info> {
+impl<'info> Validate<'info> for UserClaim<'info> {
     fn validate(&self) -> Result<()> {
         invariant!(!self.rewarder.is_paused, Paused);
         // authority
@@ -218,8 +186,6 @@ pub struct ClaimEvent {
     pub rewards_token: Pubkey,
     /// Amount of rewards token received.
     pub amount: u64,
-    /// Fees paid.
-    pub fees: u64,
     /// When the event occurred.
     pub timestamp: i64,
 }

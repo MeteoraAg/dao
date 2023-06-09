@@ -426,3 +426,10 @@ export async function invokeAndAssertError(
 
   expect(error).not.null;
 }
+
+
+export const encodeU32 = (num: number): Buffer => {
+  const buf = Buffer.alloc(4);
+  buf.writeUInt32LE(num);
+  return buf;
+};

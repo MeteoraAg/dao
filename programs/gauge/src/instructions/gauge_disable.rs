@@ -12,7 +12,7 @@ pub struct GaugeDisable<'info> {
     /// The [Gauge] to disable.
     #[account(mut)]
     pub gauge: Account<'info, Gauge>,
-    /// The [Gaugemeister::foreman].
+    /// The [GaugeFactorty::foreman].
     pub foreman: Signer<'info>,
 }
 
@@ -44,9 +44,9 @@ pub struct GaugeDisableEvent {
     /// The [Gauge].
     #[index]
     pub gauge: Pubkey,
-    /// The [Gaugemeister].
+    /// The [GaugeFactorty].
     #[index]
     pub gauge_factory: Pubkey,
-    /// The [Gaugemeister::foreman] that disabled the gauge.
+    /// The [GaugeFactorty::foreman] that disabled the gauge.
     pub foreman: Pubkey,
 }

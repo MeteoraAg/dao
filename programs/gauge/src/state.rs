@@ -1,10 +1,8 @@
 //! Struct definitions for accounts that hold state.
 
-use anchor_lang::solana_program::pubkey::PUBKEY_BYTES;
-
 use crate::*;
 
-/// Manages the rewards shares of all [Gauge]s of a [quarry_mine::rewarder].
+/// Manages the rewards shares of all [Gauge]s of a [quarry::rewarder].
 #[account]
 #[derive(Copy, Debug, Default)]
 pub struct GaugeFactory {
@@ -14,12 +12,12 @@ pub struct GaugeFactory {
     pub bump: u8,
 
     // /// The Rewarder.
-    // pub rewarder: Pubkey,
-    // /// The Quarry Operator.
-    // pub operator: Pubkey,
-    // /// The [locked_voter::Locker].
-    // pub locker: Pubkey,
-    /// Account which may enable/disable gauges on the [Gaugemeister].
+    pub rewarder: Pubkey,
+
+    /// The [voter::Locker].
+    pub locker: Pubkey,
+    /// Account which may enable/disable gauges on the [GaugeFactory].
+    /// Normally this should be smartwallet
     /// May call the following instructions:
     /// - gauge_enable
     /// - gauge_disable
@@ -33,12 +31,6 @@ pub struct GaugeFactory {
     pub current_rewards_epoch: u32,
     /// When the next epoch starts.
     pub next_epoch_starts_at: u64,
-    // /// Token mint. Unused but useful for frontends.
-    // pub locker_token_mint: Pubkey,
-    // /// Governor associated with the Locker. Unused but useful for frontends.
-    // pub locker_governor: Pubkey,
-    /// locker of the factory
-    pub locker: Pubkey,
 }
 
 impl GaugeFactory {
@@ -49,20 +41,20 @@ impl GaugeFactory {
     }
 }
 
-/// A [Gauge] determines the rewards shares to give to a [quarry_mine::Quarry].
+/// A [Gauge] determines the rewards shares to give to a [quarry::Quarry].
 #[account]
 #[derive(Copy, Debug, Default)]
 pub struct Gauge {
     /// The [GaugeFactory].
     pub gauge_factory: Pubkey,
-    /// The [quarry_mine::Quarry] being voted on.
+    /// The [quarry::Quarry] being voted on.
     pub quarry: Pubkey,
     /// If true, this Gauge cannot receive any more votes
     /// and rewards shares cannot be synchronized from it.
     pub is_disabled: bool,
 }
 
-/// A [GaugeVoter] represents an [locked_voter::Escrow] that can vote on gauges.
+/// A [GaugeVoter] represents an [voter::Escrow] that can vote on gauges.
 #[account]
 #[derive(Copy, Debug, Default)]
 pub struct GaugeVoter {
@@ -85,11 +77,6 @@ pub struct GaugeVoter {
     pub weight_change_seqno: u64,
 }
 
-impl GaugeVoter {
-    /// Length of a [GaugeVoter] in bytes.
-    pub const LEN: usize = PUBKEY_BYTES * 3 + 4 + 8;
-}
-
 /// A [GaugeVote] is a user's vote for a given [Gauge].
 #[account]
 #[derive(Copy, Debug, Default)]
@@ -101,11 +88,6 @@ pub struct GaugeVote {
 
     /// Proportion of votes that the voter is applying to this gauge.
     pub weight: u32,
-}
-
-impl GaugeVote {
-    /// Length of a [GaugeVote] in bytes.
-    pub const LEN: usize = PUBKEY_BYTES * 2 + 4;
 }
 
 /// An [EpochGauge] is a [Gauge]'s total committed votes for a given epoch.
@@ -130,11 +112,6 @@ pub struct EpochGauge {
     pub total_power: u64,
 }
 
-impl EpochGauge {
-    /// Length of an [EpochGauge] in bytes.
-    pub const LEN: usize = PUBKEY_BYTES + 4 + 8;
-}
-
 /// An [EpochGaugeVoter] is a [GaugeVoter]'s total committed votes for a
 /// given [Gauge] at a given epoch.
 #[account]
@@ -153,11 +130,6 @@ pub struct EpochGaugeVoter {
     /// The total amount of gauge voting power that has been allocated.
     /// If this number is non-zero, vote weights cannot be changed until they are all withdrawn.
     pub allocated_power: u64,
-}
-
-impl EpochGaugeVoter {
-    /// Length of an [EpochGaugeVoter] in bytes.
-    pub const LEN: usize = PUBKEY_BYTES + 4 + 8 * 3;
 }
 
 /// An [EpochGaugeVote] is a user's committed votes for a given [Gauge] at a given epoch.
@@ -179,11 +151,6 @@ pub struct EpochGaugeVote {
     /// vote_power_at_expiry * (weight / total_weight)
     /// ```
     pub allocated_power: u64,
-}
-
-impl EpochGaugeVote {
-    /// Length of an [EpochGaugeVote] in bytes.
-    pub const LEN: usize = 8;
 }
 
 impl EpochGaugeVote {

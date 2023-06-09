@@ -1,6 +1,6 @@
 //! Creates a [Gauge].
 
-use vipers::assert_keys_eq;
+// use vipers::assert_keys_eq;
 
 use crate::*;
 
@@ -46,7 +46,7 @@ pub fn handler(ctx: Context<CreateGauge>) -> Result<()> {
 
 impl<'info> Validate<'info> for CreateGauge<'info> {
     fn validate(&self) -> Result<()> {
-        // assert_keys_eq!(self.gaugemeister.rewarder, self.quarry.rewarder);
+        assert_keys_eq!(self.gauge_factory.rewarder, self.quarry.rewarder);
         Ok(())
     }
 }
@@ -55,13 +55,13 @@ impl<'info> Validate<'info> for CreateGauge<'info> {
 #[event]
 pub struct GaugeCreateEvent {
     #[index]
-    /// The [Gaugemeister].
-    pub gaugemeister: Pubkey,
+    /// The [GaugeFactory].
+    pub gauge_factory: Pubkey,
     #[index]
     /// The Rewarder.
     pub rewarder: Pubkey,
     #[index]
-    /// The [quarry_mine::Quarry] being voted on.
+    /// The [quarry::Quarry] being voted on.
     pub quarry: Pubkey,
     #[index]
     /// Owner of the Escrow of the [GaugeVoter].
