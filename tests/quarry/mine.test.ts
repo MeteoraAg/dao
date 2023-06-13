@@ -61,9 +61,6 @@ describe("Mine", () => {
   beforeEach("Initialize minter", async () => {
     minterBase = new anchor.web3.Keypair();
 
-    // const rewardsMintKP = Keypair.generate();
-    // rewardsMint = rewardsMintKP.publicKey;
-
     // create mint
     rewardsMint = await createMint(
       provider.connection,
@@ -118,7 +115,7 @@ describe("Mine", () => {
       await program.methods.newRewarder().accounts({
         base: rewarderBase,
         rewarder,
-        initialAuthority: provider.wallet.publicKey,
+        admin: provider.wallet.publicKey,
         payer: provider.wallet.publicKey,
         systemProgram: SystemProgram.programId,
         mintWrapper: mintWrapperKey,
@@ -130,7 +127,7 @@ describe("Mine", () => {
     it("Is initialized!", async () => {
       const rewarder = await program.account.rewarder.fetch(rewarderKey);
 
-      expect(rewarder.authority).to.deep.equal(provider.wallet.publicKey);
+      expect(rewarder.admin).to.deep.equal(provider.wallet.publicKey);
       expect(rewarder.annualRewardsRate.toNumber()).to.equal(0);
       expect(rewarder.numQuarries).to.equal(0);
       expect(rewarder.totalRewardsShares.toNumber()).to.deep.equal(0);
@@ -139,7 +136,7 @@ describe("Mine", () => {
     it("Set daily rewards rate", async () => {
       await program.methods.setAnnualRewards(ANNUAL_REWARDS_RATE).accounts({
         auth: {
-          authority: provider.wallet.publicKey,
+          admin: provider.wallet.publicKey,
           rewarder: rewarderKey,
         }
       }).rpc();
@@ -147,41 +144,41 @@ describe("Mine", () => {
       expect(rewarder.annualRewardsRate.toNumber()).to.deep.equal(ANNUAL_REWARDS_RATE.toNumber());
     });
 
-    it("Transfer authority and accept authority", async () => {
-      const newAuthority = web3.Keypair.generate();
+    it("Transfer admin and accept admin", async () => {
+      const newAdmin = web3.Keypair.generate();
 
-      await program.methods.transferAuthority(newAuthority.publicKey).accounts({
-        authority: provider.wallet.publicKey,
+      await program.methods.transferAdmin(newAdmin.publicKey).accounts({
+        admin: provider.wallet.publicKey,
         rewarder: rewarderKey,
       }).rpc();
 
       let rewarder = await program.account.rewarder.fetch(rewarderKey);
-      expect(rewarder.authority).to.deep.equal(provider.wallet.publicKey);
-      expect(rewarder.pendingAuthority).to.deep.equal(newAuthority.publicKey);
+      expect(rewarder.admin).to.deep.equal(provider.wallet.publicKey);
+      expect(rewarder.pendingAdmin).to.deep.equal(newAdmin.publicKey);
 
-      await program.methods.acceptAuthority().accounts({
-        authority: newAuthority.publicKey,
+      await program.methods.acceptAdmin().accounts({
+        admin: newAdmin.publicKey,
         rewarder: rewarderKey,
-      }).signers([newAuthority]).rpc();
+      }).signers([newAdmin]).rpc();
 
 
       rewarder = await program.account.rewarder.fetch(rewarderKey);
-      expect(rewarder.authority).to.deep.equal(newAuthority.publicKey);
-      expect(rewarder.pendingAuthority).to.deep.equal(web3.PublicKey.default);
+      expect(rewarder.admin).to.deep.equal(newAdmin.publicKey);
+      expect(rewarder.pendingAdmin).to.deep.equal(web3.PublicKey.default);
 
       // transfer back
-      await program.methods.transferAuthority(provider.wallet.publicKey).accounts({
-        authority: newAuthority.publicKey,
+      await program.methods.transferAdmin(provider.wallet.publicKey).accounts({
+        admin: newAdmin.publicKey,
         rewarder: rewarderKey,
-      }).signers([newAuthority]).rpc();
-      await program.methods.acceptAuthority().accounts({
-        authority: provider.wallet.publicKey,
+      }).signers([newAdmin]).rpc();
+      await program.methods.acceptAdmin().accounts({
+        admin: provider.wallet.publicKey,
         rewarder: rewarderKey,
       }).rpc();
 
       rewarder = await program.account.rewarder.fetch(rewarderKey);
-      expect(rewarder.authority).to.deep.equal(provider.wallet.publicKey);
-      expect(rewarder.pendingAuthority).to.deep.equal(web3.PublicKey.default);
+      expect(rewarder.admin).to.deep.equal(provider.wallet.publicKey);
+      expect(rewarder.pendingAdmin).to.deep.equal(web3.PublicKey.default);
     });
   });
 
@@ -201,7 +198,7 @@ describe("Mine", () => {
       await program.methods.newRewarder().accounts({
         base: rewarderBase,
         rewarder,
-        initialAuthority: provider.wallet.publicKey,
+        admin: provider.wallet.publicKey,
         payer: provider.wallet.publicKey,
         systemProgram: SystemProgram.programId,
         mintWrapper: mintWrapperKey,
@@ -212,7 +209,7 @@ describe("Mine", () => {
 
       await program.methods.setAnnualRewards(ANNUAL_REWARDS_RATE).accounts({
         auth: {
-          authority: provider.wallet.publicKey,
+          admin: provider.wallet.publicKey,
           rewarder: rewarderKey,
         }
       }).rpc();
@@ -231,7 +228,7 @@ describe("Mine", () => {
         await program.methods.createQuarry().accounts({
           quarry,
           auth: {
-            authority: provider.wallet.publicKey,
+            admin: provider.wallet.publicKey,
             rewarder: rewarderKey,
           },
           tokenMint: stakeTokenMint,
@@ -288,7 +285,7 @@ describe("Mine", () => {
         await program.methods.setFamine(now).accounts({
           quarry: quarryKey,
           auth: {
-            authority: provider.wallet.publicKey,
+            admin: provider.wallet.publicKey,
             rewarder: rewarderKey,
           },
         }).rpc();
@@ -316,7 +313,7 @@ describe("Mine", () => {
           await program.methods.createQuarry().accounts({
             quarry,
             auth: {
-              authority: fakeAuthority.publicKey,
+              admin: fakeAuthority.publicKey,
               rewarder: rewarderKey,
             },
             tokenMint: nextMint,
@@ -340,7 +337,7 @@ describe("Mine", () => {
           await program.methods.createQuarry().accounts({
             quarry,
             auth: {
-              authority: provider.wallet.publicKey,
+              admin: provider.wallet.publicKey,
               rewarder: rewarderKey,
             },
             tokenMint: stakeTokenMint,
@@ -380,7 +377,7 @@ describe("Mine", () => {
           await program.methods.createQuarry().accounts({
             quarry,
             auth: {
-              authority: provider.wallet.publicKey,
+              admin: provider.wallet.publicKey,
               rewarder: rewarderKey,
             },
             tokenMint: mint,
@@ -432,7 +429,7 @@ describe("Mine", () => {
         // update annual reward
         await program.methods.setAnnualRewards(nextAnnualRewardsRate).accounts({
           auth: {
-            authority: provider.wallet.publicKey,
+            admin: provider.wallet.publicKey,
             rewarder: rewarderKey,
           }
         }).rpc();
@@ -484,7 +481,7 @@ describe("Mine", () => {
         // update annual reward
         await program.methods.setAnnualRewards(ANNUAL_REWARDS_RATE).accounts({
           auth: {
-            authority: provider.wallet.publicKey,
+            admin: provider.wallet.publicKey,
             rewarder: rewarderKey,
           }
         }).rpc();
@@ -539,7 +536,7 @@ describe("Mine", () => {
       await program.methods.newRewarder().accounts({
         base: rewarderBase,
         rewarder,
-        initialAuthority: provider.wallet.publicKey,
+        admin: provider.wallet.publicKey,
         payer: provider.wallet.publicKey,
         systemProgram: SystemProgram.programId,
         mintWrapper: mintWrapperKey,
@@ -549,7 +546,7 @@ describe("Mine", () => {
 
       await program.methods.setAnnualRewards(ANNUAL_REWARDS_RATE).accounts({
         auth: {
-          authority: provider.wallet.publicKey,
+          admin: provider.wallet.publicKey,
           rewarder: rewarderKey,
         }
       }).rpc();
@@ -563,7 +560,7 @@ describe("Mine", () => {
       await program.methods.createQuarry().accounts({
         quarry,
         auth: {
-          authority: provider.wallet.publicKey,
+          admin: provider.wallet.publicKey,
           rewarder: rewarderKey,
         },
         tokenMint: stakeTokenMint,
@@ -586,12 +583,11 @@ describe("Mine", () => {
           program.programId
         );
 
-      let minerVault = await getOrCreateATA(
-        stakeTokenMint,
-        miner,
-        keypair,
-        provider.connection
-      );
+      const [minerVault, bump] =
+        await anchor.web3.PublicKey.findProgramAddress(
+          [Buffer.from("MinerVault"), miner.toBuffer()],
+          program.programId
+        );
 
       await program.methods.createMiner().accounts({
         authority: provider.wallet.publicKey,
@@ -639,12 +635,11 @@ describe("Mine", () => {
         amount
       );
 
-      let minerVault = await getOrCreateATA(
-        stakeTokenMint,
-        minerKey,
-        keypair,
-        provider.connection
-      );
+      const [minerVault, bump] =
+        await anchor.web3.PublicKey.findProgramAddress(
+          [Buffer.from("MinerVault"), minerKey.toBuffer()],
+          program.programId
+        );
 
       // stake into the quarry
       await program.methods.stakeTokens(new BN(amount)).accounts({
@@ -668,7 +663,7 @@ describe("Mine", () => {
 
 
       // withdraw from the quarry
-      await program.methods.withdrawTokens(new BN(amount)).accounts({
+      await program.methods.unstakeTokens(new BN(amount)).accounts({
         authority: provider.wallet.publicKey,
         miner: minerKey,
         quarry: quarryKey,

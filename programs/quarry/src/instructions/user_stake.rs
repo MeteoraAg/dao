@@ -69,7 +69,7 @@ pub fn handler_stake_tokens(ctx: Context<UserStake>, amount: u64) -> Result<()> 
     Ok(())
 }
 
-pub fn handler_withdraw_tokens(ctx: Context<UserStake>, amount: u64) -> Result<()> {
+pub fn handler_unstake_tokens(ctx: Context<UserStake>, amount: u64) -> Result<()> {
     if amount == 0 {
         // noop
         return Ok(());

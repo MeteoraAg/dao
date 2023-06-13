@@ -12,10 +12,10 @@ pub struct Rewarder {
     /// Bump seed for program address.
     pub bump: u8,
 
-    /// Authority who controls the rewarder
-    pub authority: Pubkey,
-    /// Pending authority which must accept the authority
-    pub pending_authority: Pubkey,
+    /// Admin who controls the rewarder
+    pub admin: Pubkey,
+    /// Pending admin which must accept the admin
+    pub pending_admin: Pubkey,
 
     /// Number of [Quarry]s the [Rewarder] manages.
     /// If more than this many [Quarry]s are desired, one can create
@@ -36,7 +36,7 @@ pub struct Rewarder {
     pub is_paused: bool,
 
     // operator can set rewards share, normally it is gauge factory
-    pub operator: Pubkey,
+    pub mint_authority: Pubkey,
 }
 
 impl Rewarder {

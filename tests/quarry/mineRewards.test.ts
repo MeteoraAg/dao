@@ -113,7 +113,7 @@ describe("Mine Rewards", () => {
     await program.methods.newRewarder().accounts({
       base: rewarderBase,
       rewarder,
-      initialAuthority: provider.wallet.publicKey,
+      admin: provider.wallet.publicKey,
       payer: provider.wallet.publicKey,
       systemProgram: SystemProgram.programId,
       mintWrapper: mintWrapperKey,
@@ -126,7 +126,7 @@ describe("Mine Rewards", () => {
 
     await program.methods.setAnnualRewards(annualRewardsRate).accounts({
       auth: {
-        authority: provider.wallet.publicKey,
+        admin: provider.wallet.publicKey,
         rewarder: rewarderKey,
       }
     }).rpc();
@@ -177,7 +177,7 @@ describe("Mine Rewards", () => {
     await program.methods.createQuarry().accounts({
       quarry,
       auth: {
-        authority: provider.wallet.publicKey,
+        admin: provider.wallet.publicKey,
         rewarder: rewarderKey,
       },
       tokenMint: stakeTokenMint,
@@ -213,12 +213,18 @@ describe("Mine Rewards", () => {
       );
     minerKey = miner;
 
-    let minerVault = await getOrCreateATA(
-      stakeTokenMint,
-      miner,
-      keypair,
-      provider.connection
-    );
+    // let minerVault = await getOrCreateATA(
+    //   stakeTokenMint,
+    //   miner,
+    //   keypair,
+    //   provider.connection
+    // );
+
+    const [minerVault, bump] =
+      await anchor.web3.PublicKey.findProgramAddress(
+        [Buffer.from("MinerVault"), minerKey.toBuffer()],
+        program.programId
+      );
 
     await program.methods.createMiner().accounts({
       authority: provider.wallet.publicKey,
@@ -235,12 +241,11 @@ describe("Mine Rewards", () => {
 
 
   it("Does not lose rewards when setting quarry share", async () => {
-    let minerVault = await getOrCreateATA(
-      stakeTokenMint,
-      minerKey,
-      keypair,
-      provider.connection
-    );
+    const [minerVault, bump] =
+      await anchor.web3.PublicKey.findProgramAddress(
+        [Buffer.from("MinerVault"), minerKey.toBuffer()],
+        program.programId
+      );
     let userStakeTokenAccount = await getOrCreateATA(
       stakeTokenMint,
       provider.wallet.publicKey,

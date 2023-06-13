@@ -7,6 +7,7 @@ pub struct SetRewardsShare<'info> {
     pub authority: Signer<'info>,
 
     /// Rewarder of the farm.    
+    #[account(mut)]
     pub rewarder: Account<'info, Rewarder>,
 
     /// [Quarry] updated.
@@ -41,8 +42,8 @@ impl<'info> Validate<'info> for SetRewardsShare<'info> {
         self.rewarder.assert_not_paused()?;
 
         invariant!(
-            self.authority.key() == self.rewarder.authority
-                || self.authority.key() == self.rewarder.operator,
+            self.authority.key() == self.rewarder.admin
+                || self.authority.key() == self.rewarder.mint_authority,
             Unauthorized
         );
 

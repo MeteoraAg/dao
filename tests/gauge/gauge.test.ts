@@ -162,12 +162,12 @@ describe("Gauge", () => {
         await programQuarry.methods.newRewarder().accounts({
             base: baseKP.publicKey,
             rewarder: rewarderAddr,
-            initialAuthority: adminKP.publicKey,
+            admin: adminKP.publicKey,
             payer: provider.wallet.publicKey,
             systemProgram: SystemProgram.programId,
             mintWrapper,
             rewardsTokenMint: rewardsMint,
-        }).signers([baseKP]).rpc();
+        }).signers([baseKP, adminKP]).rpc();
         rewarder = rewarderAddr;
     })
     beforeEach("setup Governor and Voter", async () => {
@@ -306,8 +306,8 @@ describe("Gauge", () => {
             }).signers([baseKP])
             .rpc();
         // set operator to gauge factory, so gauge factory can set rewards share
-        await programQuarry.methods.setOperator(gaugeFactoryAddr).accounts({
-            authority: adminKP.publicKey,
+        await programQuarry.methods.setMintAuthority(gaugeFactoryAddr).accounts({
+            admin: adminKP.publicKey,
             rewarder,
         }).signers([adminKP]).rpc();
 
@@ -797,7 +797,7 @@ export async function createQuarry(rewarder: PublicKey, adminKP: Keypair, progra
     await programQuarry.methods.createQuarry().accounts({
         quarry,
         auth: {
-            authority: adminKP.publicKey,
+            admin: adminKP.publicKey,
             rewarder,
         },
         tokenMint: farmTokenMint,

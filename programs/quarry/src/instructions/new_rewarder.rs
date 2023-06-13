@@ -19,9 +19,9 @@ pub struct NewRewarder<'info> {
     )]
     pub rewarder: Account<'info, Rewarder>,
 
-    /// Initial authority of the rewarder.
+    /// Initial admin of the rewarder.
     /// CHECK: OK
-    pub initial_authority: UncheckedAccount<'info>,
+    pub admin: Signer<'info>,
 
     /// Payer of the [Rewarder] initialization.
     #[account(mut)]
@@ -43,9 +43,11 @@ pub fn handler(ctx: Context<NewRewarder>) -> Result<()> {
     rewarder.base = ctx.accounts.base.key();
     rewarder.bump = unwrap_bump!(ctx, "rewarder");
 
-    rewarder.authority = ctx.accounts.initial_authority.key();
-    rewarder.pending_authority = Pubkey::default();
-    rewarder.operator = ctx.accounts.initial_authority.key();
+    rewarder.admin = ctx.accounts.admin.key();
+    rewarder.pending_admin = Pubkey::default();
+    rewarder.mint_authority = ctx.accounts.admin.key();
+    rewarder.pause_authority = ctx.accounts.admin.key();
+    rewarder.is_paused = false;
 
     rewarder.annual_rewards_rate = 0;
     rewarder.num_quarries = 0;
@@ -54,12 +56,9 @@ pub fn handler(ctx: Context<NewRewarder>) -> Result<()> {
 
     rewarder.rewards_token_mint = ctx.accounts.rewards_token_mint.key();
 
-    rewarder.pause_authority = Pubkey::default();
-    rewarder.is_paused = false;
-
     let current_ts = Clock::get()?.unix_timestamp;
     emit!(NewRewarderEvent {
-        authority: rewarder.authority,
+        admin: rewarder.admin,
         timestamp: current_ts,
     });
 
@@ -82,9 +81,9 @@ impl<'info> Validate<'info> for NewRewarder<'info> {
 /// Emitted when a new [Rewarder] is created.
 #[event]
 pub struct NewRewarderEvent {
-    /// Authority of the rewarder
+    /// Admin of the rewarder
     #[index]
-    pub authority: Pubkey,
+    pub admin: Pubkey,
     /// When the event occurred.
     pub timestamp: i64,
 }

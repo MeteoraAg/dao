@@ -107,23 +107,24 @@ describe("Famine", () => {
         [Buffer.from("Rewarder"), rewarderBase.toBuffer()],
         program.programId
       );
+    rewarderKey = rewarder;
     await program.methods.newRewarder().accounts({
       base: rewarderBase,
       rewarder,
-      initialAuthority: provider.wallet.publicKey,
+      admin: provider.wallet.publicKey,
       payer: provider.wallet.publicKey,
       systemProgram: SystemProgram.programId,
       mintWrapper: mintWrapperKey,
       rewardsTokenMint: rewardsMint,
     }).signers([rewarderBaseKP]).rpc();
-    rewarderKey = rewarder;
+
 
     const rewarderState = await program.account.rewarder.fetch(rewarderKey);
     expect(rewarderState.rewardsTokenMint).to.deep.equal(rewardsMint);
 
     await program.methods.setAnnualRewards(annualRewardsRate).accounts({
       auth: {
-        authority: provider.wallet.publicKey,
+        admin: provider.wallet.publicKey,
         rewarder: rewarderKey,
       }
     }).rpc();
@@ -174,7 +175,7 @@ describe("Famine", () => {
     await program.methods.createQuarry().accounts({
       quarry,
       auth: {
-        authority: provider.wallet.publicKey,
+        admin: provider.wallet.publicKey,
         rewarder: rewarderKey,
       },
       tokenMint: stakeTokenMint,
@@ -210,12 +211,11 @@ describe("Famine", () => {
       );
     minerKey = miner;
 
-    let minerVault = await getOrCreateATA(
-      stakeTokenMint,
-      miner,
-      keypair,
-      provider.connection
-    );
+    const [minerVault, bump] =
+      await anchor.web3.PublicKey.findProgramAddress(
+        [Buffer.from("MinerVault"), miner.toBuffer()],
+        program.programId
+      );
 
     await program.methods.createMiner().accounts({
       authority: provider.wallet.publicKey,
@@ -231,26 +231,29 @@ describe("Famine", () => {
   });
 
   it("Stake and claim after famine", async () => {
+
     const famine = new BN(Date.now() / 1000 - 5); // Rewards stopped 5 seconds ago
     await program.methods.setFamine(famine).accounts({
       quarry: quarryKey,
       auth: {
-        authority: provider.wallet.publicKey,
+        admin: provider.wallet.publicKey,
         rewarder: rewarderKey,
       },
     }).rpc();
-    let minerVault = await getOrCreateATA(
-      stakeTokenMint,
-      minerKey,
-      keypair,
-      provider.connection
-    );
+
+    const [minerVault, bump] =
+      await anchor.web3.PublicKey.findProgramAddress(
+        [Buffer.from("MinerVault"), minerKey.toBuffer()],
+        program.programId
+      );
+
     let userStakeTokenAccount = await getOrCreateATA(
       stakeTokenMint,
       provider.wallet.publicKey,
       keypair,
       provider.connection
     );
+
     await program.methods.stakeTokens(new BN(stakeAmount)).accounts({
       authority: provider.wallet.publicKey,
       miner: minerKey,
@@ -304,16 +307,16 @@ describe("Famine", () => {
     await program.methods.setFamine(famine).accounts({
       quarry: quarryKey,
       auth: {
-        authority: provider.wallet.publicKey,
+        admin: provider.wallet.publicKey,
         rewarder: rewarderKey,
       },
     }).rpc();
-    let minerVault = await getOrCreateATA(
-      stakeTokenMint,
-      minerKey,
-      keypair,
-      provider.connection
-    );
+
+    const [minerVault, bump] =
+      await anchor.web3.PublicKey.findProgramAddress(
+        [Buffer.from("MinerVault"), minerKey.toBuffer()],
+        program.programId
+      );
     let userStakeTokenAccount = await getOrCreateATA(
       stakeTokenMint,
       provider.wallet.publicKey,

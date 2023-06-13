@@ -36,13 +36,6 @@ pub struct NewLocker<'info> {
 impl<'info> NewLocker<'info> {
     /// Creates a new [Locker].
     pub fn new_locker(&mut self, bump: u8, expiration: i64, params: LockerParams) -> Result<()> {
-        // validate expiration
-        #[cfg(not(feature = "test-bpf"))]
-        {
-            let now = Clock::get()?.unix_timestamp;
-            // buffer 1 day, so incase smart_wallet update wrongly, we can update it again
-            invariant!(expiration >= now + 86400, ExpirationIsLessThanCurrentTime);
-        }
         let locker = &mut self.locker;
         locker.token_mint = self.token_mint.key();
         locker.governor = self.governor.key();

@@ -4,21 +4,21 @@ use crate::*;
 #[derive(Accounts)]
 pub struct SetFamine<'info> {
     /// [Rewarder] of the [Quarry].
-    pub auth: ReadOnlyRewarderWithAuthority<'info>,
+    pub auth: ReadOnlyRewarderWithAdmin<'info>,
 
     /// [Quarry] updated.
     #[account(mut, constraint = quarry.rewarder == auth.rewarder.key())]
     pub quarry: Account<'info, Quarry>,
 }
 
-/// Read-only [Rewarder] that requires the authority to be a signer.
+/// Read-only [Rewarder] that requires the admin to be a signer.
 #[derive(Accounts)]
-pub struct ReadOnlyRewarderWithAuthority<'info> {
-    /// Authority of the rewarder.
-    pub authority: Signer<'info>,
+pub struct ReadOnlyRewarderWithAdmin<'info> {
+    /// Admin of the rewarder.
+    pub admin: Signer<'info>,
 
     /// [Rewarder].
-    #[account(has_one = authority)]
+    #[account(has_one = admin)]
     pub rewarder: Account<'info, Rewarder>,
 }
 
@@ -36,11 +36,11 @@ impl<'info> Validate<'info> for SetFamine<'info> {
         Ok(())
     }
 }
-impl<'info> Validate<'info> for ReadOnlyRewarderWithAuthority<'info> {
+impl<'info> Validate<'info> for ReadOnlyRewarderWithAdmin<'info> {
     /// Validates the [crate::Rewarder] is correct.
     fn validate(&self) -> Result<()> {
-        invariant!(self.authority.is_signer, Unauthorized);
-        assert_keys_eq!(self.authority, self.rewarder.authority);
+        invariant!(self.admin.is_signer, Unauthorized);
+        assert_keys_eq!(self.admin, self.rewarder.admin);
         Ok(())
     }
 }

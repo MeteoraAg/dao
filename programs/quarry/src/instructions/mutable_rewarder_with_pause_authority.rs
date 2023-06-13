@@ -20,11 +20,13 @@ pub fn handler(ctx: Context<MutableRewarderWithPauseAuthority>, is_paused: bool)
 impl<'info> Validate<'info> for MutableRewarderWithPauseAuthority<'info> {
     fn validate(&self) -> Result<()> {
         invariant!(self.pause_authority.is_signer, Unauthorized);
-        assert_keys_eq!(
-            self.rewarder.pause_authority,
-            self.pause_authority,
+
+        invariant!(
+            self.pause_authority.key() == self.rewarder.admin
+                || self.pause_authority.key() == self.rewarder.pause_authority,
             Unauthorized
         );
+
         Ok(())
     }
 }

@@ -20,6 +20,17 @@ pub struct CreateMiner<'info> {
     )]
     pub miner: Box<Account<'info, Miner>>,
 
+    /// [TokenAccount] holding the token [Mint].
+    #[account(
+        init,
+        seeds = [b"MinerVault".as_ref(), miner.key().as_ref()],
+        bump,
+        payer = payer,
+        token::mint = token_mint,
+        token::authority = miner,
+    )]
+    pub miner_vault: Account<'info, TokenAccount>,
+
     /// [Quarry] to create a [Miner] for.
     #[account(mut)]
     pub quarry: Box<Account<'info, Quarry>>,
@@ -36,9 +47,6 @@ pub struct CreateMiner<'info> {
 
     /// [Mint] of the token to create a [Quarry] for.
     pub token_mint: Account<'info, Mint>,
-
-    /// [TokenAccount] holding the token [Mint].
-    pub miner_vault: Account<'info, TokenAccount>,
 
     /// SPL Token program.
     pub token_program: Program<'info, Token>,
@@ -74,12 +82,12 @@ pub fn handler(ctx: Context<CreateMiner>) -> Result<()> {
 impl<'info> Validate<'info> for CreateMiner<'info> {
     fn validate(&self) -> Result<()> {
         invariant!(!self.rewarder.is_paused, Paused);
-        assert_keys_eq!(self.miner_vault.owner, self.miner);
-        assert_keys_eq!(self.miner_vault.mint, self.token_mint);
-        invariant!(self.miner_vault.delegate.is_none());
-        invariant!(self.miner_vault.close_authority.is_none());
+        // assert_keys_eq!(self.miner_vault.owner, self.miner);
+        // assert_keys_eq!(self.miner_vault.mint, self.token_mint);
+        // invariant!(self.miner_vault.delegate.is_none());
+        // invariant!(self.miner_vault.close_authority.is_none());
 
-        assert_keys_eq!(self.miner_vault.mint, self.quarry.token_mint_key);
+        assert_keys_eq!(self.token_mint, self.quarry.token_mint_key);
         assert_keys_eq!(self.quarry.rewarder, self.rewarder);
 
         Ok(())

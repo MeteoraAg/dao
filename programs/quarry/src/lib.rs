@@ -53,11 +53,11 @@ pub mod quarry {
 
     /// Set operator [Rewarder].
     #[access_control(ctx.accounts.validate())]
-    pub fn set_operator(
+    pub fn set_mint_authority(
         ctx: Context<MutableRewarderWithAuthority>,
-        operator: Pubkey,
+        mint_authority: Pubkey,
     ) -> Result<()> {
-        mutable_rewarder_with_authority::handler_set_operator(ctx, operator)
+        mutable_rewarder_with_authority::handler_set_mint_authority(ctx, mint_authority)
     }
 
     /// Sets the pause authority.
@@ -78,19 +78,16 @@ pub mod quarry {
         mutable_rewarder_with_pause_authority::handler(ctx, false)
     }
 
-    /// Transfers the [Rewarder] authority to a different account.
+    /// Transfers the [Rewarder] admin to a different account.
     #[access_control(ctx.accounts.validate())]
-    pub fn transfer_authority(
-        ctx: Context<TransferAuthority>,
-        new_authority: Pubkey,
-    ) -> Result<()> {
-        transfer_authority::handler(ctx, new_authority)
+    pub fn transfer_admin(ctx: Context<TransferAdmin>, new_admin: Pubkey) -> Result<()> {
+        transfer_admin::handler(ctx, new_admin)
     }
 
-    /// Accepts the authority to become the new rewarder.
+    /// Accepts the admin to become the new rewarder.
     #[access_control(ctx.accounts.validate())]
-    pub fn accept_authority(ctx: Context<AcceptAuthority>) -> Result<()> {
-        accept_authority::handler(ctx)
+    pub fn accept_admin(ctx: Context<AcceptAdmin>) -> Result<()> {
+        accept_admin::handler(ctx)
     }
 
     /// Sets the amount of reward tokens distributed to all [Quarry]s per day.
@@ -153,10 +150,10 @@ pub mod quarry {
         user_stake::handler_stake_tokens(ctx, amount)
     }
 
-    /// Withdraws tokens from the [Miner].
+    /// Unstake tokens from the [Miner].
     #[access_control(ctx.accounts.validate())]
-    pub fn withdraw_tokens(ctx: Context<UserStake>, amount: u64) -> Result<()> {
-        user_stake::handler_withdraw_tokens(ctx, amount)
+    pub fn unstake_tokens(ctx: Context<UserStake>, amount: u64) -> Result<()> {
+        user_stake::handler_unstake_tokens(ctx, amount)
     }
 }
 

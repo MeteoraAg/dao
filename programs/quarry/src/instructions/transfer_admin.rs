@@ -3,21 +3,21 @@ use crate::*;
 
 /// Accounts for [quarry::transfer_authority].
 #[derive(Accounts)]
-pub struct TransferAuthority<'info> {
-    /// Authority of the rewarder.
-    pub authority: Signer<'info>,
+pub struct TransferAdmin<'info> {
+    /// Admin of the rewarder.
+    pub admin: Signer<'info>,
 
     /// Rewarder of the farm.
-    #[account(mut, has_one = authority @ Unauthorized)]
+    #[account(mut, has_one = admin @ Unauthorized)]
     pub rewarder: Account<'info, Rewarder>,
 }
 
-pub fn handler(ctx: Context<TransferAuthority>, new_authority: Pubkey) -> Result<()> {
+pub fn handler(ctx: Context<TransferAdmin>, new_admin: Pubkey) -> Result<()> {
     let rewarder = &mut ctx.accounts.rewarder;
-    rewarder.pending_authority = new_authority;
+    rewarder.pending_admin = new_admin;
     Ok(())
 }
-impl<'info> Validate<'info> for TransferAuthority<'info> {
+impl<'info> Validate<'info> for TransferAdmin<'info> {
     fn validate(&self) -> Result<()> {
         self.rewarder.assert_not_paused()?;
         Ok(())

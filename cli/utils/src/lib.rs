@@ -8,6 +8,7 @@ use anchor_client::{
 };
 use anchor_lang::prelude::Pubkey;
 use regex::Regex;
+pub mod token;
 
 pub fn parse_event_log<
     T: anchor_lang::AnchorDeserialize + anchor_lang::AnchorSerialize + anchor_lang::Discriminator,

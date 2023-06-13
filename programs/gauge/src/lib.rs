@@ -34,15 +34,12 @@ pub mod gauge {
     }
 
     /// Creates a [Gauge]. Permissionless.
-    ///
-    /// The V2 variant removes the need to supply a bump seed.
     #[access_control(ctx.accounts.validate())]
     pub fn create_gauge(ctx: Context<CreateGauge>) -> Result<()> {
         create_gauge::handler(ctx)
     }
 
     /// Creates a [GaugeVoter]. Permissionless.
-    ///
     #[access_control(ctx.accounts.validate())]
     pub fn create_gauge_voter(ctx: Context<CreateGaugeVoter>) -> Result<()> {
         create_gauge_voter::handler(ctx)
