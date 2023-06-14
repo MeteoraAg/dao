@@ -48,28 +48,29 @@ impl<'info> GaugeSetVote<'info> {
 
         let next_total_weight = unwrap_int!(self.next_total_weight(weight));
 
-        let voter = &mut self.gauge_voter;
-        let vote = &mut self.gauge_vote;
+        let gauge_voter = &mut self.gauge_voter;
+        let gauge_vote = &mut self.gauge_vote;
 
         // update voter
-        let prev_total_weight = voter.total_weight;
-        voter.total_weight = next_total_weight;
+        let prev_total_weight = gauge_voter.total_weight;
+        gauge_voter.total_weight = next_total_weight;
 
         // record that the weights have changed.
-        voter.weight_change_seqno = unwrap_int!(voter.weight_change_seqno.checked_add(1));
+        gauge_voter.weight_change_seqno =
+            unwrap_int!(gauge_voter.weight_change_seqno.checked_add(1));
 
         // update vote
-        vote.weight = weight;
+        gauge_vote.weight = weight;
 
         emit!(SetGaugeVoteEvent {
             gauge_factory: self.gauge_factory.key(),
             gauge: self.gauge.key(),
             quarry: self.gauge.quarry,
-            gauge_voter_owner: voter.owner,
+            gauge_voter_owner: gauge_voter.owner,
             vote_delegate: self.vote_delegate.key(),
             prev_total_weight,
-            total_weight: voter.total_weight,
-            weight_change_seqno: voter.weight_change_seqno,
+            total_weight: gauge_voter.total_weight,
+            weight_change_seqno: gauge_voter.weight_change_seqno,
         });
 
         Ok(())

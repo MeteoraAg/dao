@@ -72,12 +72,13 @@ pub fn handler(ctx: Context<GaugeCommitVote>) -> Result<()> {
     }
 
     let epoch_gauge = &mut ctx.accounts.epoch_gauge;
-    let epoch_voter = &mut ctx.accounts.epoch_gauge_voter;
-    let epoch_vote = &mut ctx.accounts.epoch_gauge_vote;
+    let epoch_gauge_voter = &mut ctx.accounts.epoch_gauge_voter;
+    let epoch_gauge_vote = &mut ctx.accounts.epoch_gauge_vote;
 
-    epoch_voter.allocated_power =
-        unwrap_int!(epoch_voter.allocated_power.checked_add(next_vote_shares));
-    epoch_vote.allocated_power = next_vote_shares;
+    epoch_gauge_voter.allocated_power = unwrap_int!(epoch_gauge_voter
+        .allocated_power
+        .checked_add(next_vote_shares));
+    epoch_gauge_vote.allocated_power = next_vote_shares;
 
     epoch_gauge.total_power = unwrap_int!(epoch_gauge.total_power.checked_add(next_vote_shares));
 
@@ -87,8 +88,8 @@ pub fn handler(ctx: Context<GaugeCommitVote>) -> Result<()> {
         quarry: ctx.accounts.gauge.quarry,
         gauge_voter_owner: ctx.accounts.gauge_voter.owner,
         vote_shares_for_next_epoch: next_vote_shares,
-        voting_epoch: epoch_voter.voting_epoch,
-        updated_allocated_power: epoch_voter.allocated_power,
+        voting_epoch: epoch_gauge_voter.voting_epoch,
+        updated_allocated_power: epoch_gauge_voter.allocated_power,
         updated_total_power: epoch_gauge.total_power,
     });
 
