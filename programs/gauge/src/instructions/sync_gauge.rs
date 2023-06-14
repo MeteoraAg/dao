@@ -28,24 +28,6 @@ pub struct SyncGauge<'info> {
     pub quarry_program: Program<'info, quarry::program::Quarry>,
 }
 
-/// Emitted on [gauge::sync_gauge].
-#[event]
-pub struct SyncGaugeEvent {
-    /// The [Gauge].
-    #[index]
-    pub gauge: Pubkey,
-    /// The [GaugeFactory].
-    #[index]
-    pub gauge_factory: Pubkey,
-    /// The epoch synced.
-    #[index]
-    pub epoch: u32,
-    /// The previous [quarry::Quarry::rewards_share].
-    pub previous_share: u64,
-    /// The new [quarry::Quarry::rewards_share].
-    pub new_share: u64,
-}
-
 impl<'info> SyncGauge<'info> {
     fn set_rewards_share(&self) -> Result<()> {
         // Only call CPI if the rewards share actually changed.
@@ -103,4 +85,22 @@ impl<'info> Validate<'info> for SyncGauge<'info> {
 
         Ok(())
     }
+}
+
+/// Emitted on [gauge::sync_gauge].
+#[event]
+pub struct SyncGaugeEvent {
+    /// The [Gauge].
+    #[index]
+    pub gauge: Pubkey,
+    /// The [GaugeFactory].
+    #[index]
+    pub gauge_factory: Pubkey,
+    /// The epoch synced.
+    #[index]
+    pub epoch: u32,
+    /// The previous [quarry::Quarry::rewards_share].
+    pub previous_share: u64,
+    /// The new [quarry::Quarry::rewards_share].
+    pub new_share: u64,
 }

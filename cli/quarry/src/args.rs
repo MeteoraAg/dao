@@ -99,6 +99,10 @@ pub enum CliCommand {
         #[clap(long)]
         amount: u64,
     },
+    ViewMiner {
+        #[clap(long)]
+        token_mint: Pubkey,
+    },
 }
 
 #[derive(Parser, Debug)]

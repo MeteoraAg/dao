@@ -4,7 +4,7 @@ use crate::args::*;
 use anyhow::Ok;
 use anyhow::Result;
 use solana_program::system_program;
-// use utils_cli::*;
+use utils_cli::*;
 
 use anchor_client::solana_sdk::commitment_config::CommitmentConfig;
 use anchor_client::solana_sdk::pubkey::Pubkey;
@@ -39,7 +39,7 @@ fn main() -> Result<()> {
     };
     let program = client.program(program_id);
     match opts.command {
-        CliCommand::SetMintAthority { token_mint } => {
+        CliCommand::SetMintAuthority { token_mint } => {
             set_mint_authority(&program, token_mint, base.pubkey())?;
         }
         CliCommand::NewMintWrapper {
@@ -49,6 +49,13 @@ fn main() -> Result<()> {
             new_mint_wrapper(&program, hard_cap, token_mint, base)?;
         }
         CliCommand::NewMinter { minter_authority } => {
+            new_minter(&program, minter_authority, base.pubkey())?;
+        }
+        CliCommand::NewMinterForRewarder {} => {
+            let (minter_authority, _bump) = Pubkey::find_program_address(
+                &[b"Rewarder".as_ref(), base.pubkey().as_ref()],
+                &quarry::id(),
+            );
             new_minter(&program, minter_authority, base.pubkey())?;
         }
         CliCommand::TransferAdmin { next_admin } => {
@@ -62,6 +69,16 @@ fn main() -> Result<()> {
             minter_authority,
         } => {
             set_allowance(&program, allowance, minter_authority, base.pubkey())?;
+        }
+        CliCommand::SetAllowanceForRewarder { allowance } => {
+            let (minter_authority, _bump) = Pubkey::find_program_address(
+                &[b"Rewarder".as_ref(), base.pubkey().as_ref()],
+                &quarry::id(),
+            );
+            set_allowance(&program, allowance, minter_authority, base.pubkey())?;
+        }
+        CliCommand::ViewMintWrapper {} => {
+            view_mint_wrapper(&program, base.pubkey())?;
         }
     }
 
@@ -120,9 +137,26 @@ fn new_mint_wrapper(
         })
         .args(minter::instruction::NewWrapper { hard_cap })
         .signer(&base_kp);
+
+    // // let binding = default_keypair();
+    // // let builder = builder.signer(&binding);
+    // let result =
+    //     simulate_transaction(&builder, program, &vec![&base_kp, &default_keypair()]).unwrap();
+    // println!("{:?}", result);
+    // return Ok(());
+
     let signature = builder.send()?;
     println!("Signature {:?}", signature);
     Ok(())
+}
+
+fn view_mint_wrapper(program: &Program, base: Pubkey) -> Result<()> {
+    let (mint_wrapper, bump) =
+        Pubkey::find_program_address(&[b"MintWrapper".as_ref(), base.as_ref()], &minter::id());
+    let mint_wrapper_state: minter::MintWrapper = program.account(mint_wrapper)?;
+    println!("{:?}", mint_wrapper_state);
+
+    return Ok(());
 }
 
 fn new_minter(program: &Program, minter_authority: Pubkey, base: Pubkey) -> Result<()> {

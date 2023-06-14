@@ -39,17 +39,18 @@ pub struct ConfigOverride {
 
 #[derive(Parser, Debug)]
 pub enum CliCommand {
-    SetMintAthority {
+    SetMintAuthority {
         #[clap(long)]
         token_mint: Pubkey,
     },
+
     NewMintWrapper {
         #[clap(long)]
         hard_cap: u64,
         #[clap(long)]
         token_mint: Pubkey,
     },
-
+    NewMinterForRewarder {},
     NewMinter {
         #[clap(long)]
         minter_authority: Pubkey,
@@ -65,6 +66,11 @@ pub enum CliCommand {
         #[clap(long)]
         minter_authority: Pubkey,
     },
+    SetAllowanceForRewarder {
+        #[clap(long)]
+        allowance: u64,
+    },
+    ViewMintWrapper {},
 }
 
 #[derive(Parser, Debug)]

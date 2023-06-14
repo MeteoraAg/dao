@@ -5,13 +5,16 @@ use anyhow::Ok;
 use anyhow::Result;
 use solana_program::system_program;
 use utils_cli::token::get_or_create_ata;
-// use utils_cli::*;
+use utils_cli::*;
 
+use anchor_client::anchor_lang::InstructionData;
+use anchor_client::anchor_lang::ToAccountMetas;
 use anchor_client::solana_sdk::commitment_config::CommitmentConfig;
 use anchor_client::solana_sdk::pubkey::Pubkey;
 use anchor_client::solana_sdk::signer::keypair::*;
 use anchor_client::solana_sdk::signer::Signer;
 use anchor_client::{Client, Program};
+use solana_program::instruction::Instruction;
 use std::rc::Rc;
 use std::str::FromStr;
 
@@ -96,6 +99,9 @@ fn main() -> Result<()> {
         CliCommand::UnstakeToken { token_mint, amount } => {
             unstake_token(&program, amount, token_mint, base.pubkey())?;
         }
+        CliCommand::ViewMiner { token_mint } => {
+            view_miner(&program, token_mint, base.pubkey())?;
+        }
     }
 
     Ok(())
@@ -118,7 +124,8 @@ fn new_rewarder(program: &Program, rewards_token_mint: Pubkey, base_kp: Keypair)
             rewards_token_mint,
             mint_wrapper,
         })
-        .args(quarry::instruction::NewRewarder {});
+        .args(quarry::instruction::NewRewarder {})
+        .signer(&base_kp);
     let signature = builder.send()?;
     println!("Signature {:?}", signature);
     Ok(())
@@ -389,9 +396,16 @@ fn claim_rewards(program: &Program, token_mint: Pubkey, base: Pubkey) -> Result<
 
     let rewards_token_account =
         get_or_create_ata(program, rewarder_state.rewards_token_mint, program.payer())?;
-    let builder = program
-        .request()
-        .accounts(quarry::accounts::ClaimRewards {
+
+    let mut instructions = vec![];
+    instructions.push(Instruction {
+        accounts: quarry::accounts::UpdateQuarryRewards { quarry, rewarder }.to_account_metas(None),
+        data: quarry::instruction::UpdateQuarryRewards {}.data(),
+        program_id: quarry::id(),
+    });
+
+    instructions.push(Instruction {
+        accounts: quarry::accounts::ClaimRewards {
             mint_wrapper,
             mint_wrapper_program: minter::id(),
             minter,
@@ -404,41 +418,21 @@ fn claim_rewards(program: &Program, token_mint: Pubkey, base: Pubkey) -> Result<
                 token_program: spl_token::id(),
                 rewarder,
             },
-        })
-        .args(quarry::instruction::ClaimRewards {});
-    let signature = builder.send()?;
-    println!("Signature {:?}", signature);
-    Ok(())
-}
+        }
+        .to_account_metas(None),
+        data: quarry::instruction::ClaimRewards {}.data(),
+        program_id: quarry::id(),
+    });
 
-fn stake_token(program: &Program, amount: u64, token_mint: Pubkey, base: Pubkey) -> Result<()> {
-    let (rewarder, _bump) =
-        Pubkey::find_program_address(&[b"Rewarder".as_ref(), base.as_ref()], &quarry::id());
+    let builder = program.request();
+    let builder = instructions
+        .into_iter()
+        .fold(builder, |bld, ix| bld.instruction(ix));
 
-    let (quarry, _bump) = Pubkey::find_program_address(
-        &[b"Quarry".as_ref(), rewarder.as_ref(), token_mint.as_ref()],
-        &quarry::id(),
-    );
-    let (miner, _bump) = Pubkey::find_program_address(
-        &[b"Miner".as_ref(), quarry.as_ref(), program.payer().as_ref()],
-        &quarry::id(),
-    );
-    let (miner_vault, _bump) =
-        Pubkey::find_program_address(&[b"MinerVault".as_ref(), miner.as_ref()], &quarry::id());
+    // let result = simulate_transaction(&builder, program, &vec![&default_keypair()]).unwrap();
+    // println!("{:?}", result);
+    // return Ok(());
 
-    let token_account = get_or_create_ata(program, token_mint, program.payer())?;
-    let builder = program
-        .request()
-        .accounts(quarry::accounts::UserStake {
-            authority: program.payer(),
-            miner,
-            quarry,
-            miner_vault,
-            token_account,
-            rewarder,
-            token_program: spl_token::id(),
-        })
-        .args(quarry::instruction::StakeTokens { amount });
     let signature = builder.send()?;
     println!("Signature {:?}", signature);
     Ok(())
@@ -474,5 +468,88 @@ fn unstake_token(program: &Program, amount: u64, token_mint: Pubkey, base: Pubke
         .args(quarry::instruction::UnstakeTokens { amount });
     let signature = builder.send()?;
     println!("Signature {:?}", signature);
+    Ok(())
+}
+
+fn stake_token(program: &Program, amount: u64, token_mint: Pubkey, base: Pubkey) -> Result<()> {
+    let (rewarder, _bump) =
+        Pubkey::find_program_address(&[b"Rewarder".as_ref(), base.as_ref()], &quarry::id());
+
+    let (quarry, _bump) = Pubkey::find_program_address(
+        &[b"Quarry".as_ref(), rewarder.as_ref(), token_mint.as_ref()],
+        &quarry::id(),
+    );
+    let (miner, _bump) = Pubkey::find_program_address(
+        &[b"Miner".as_ref(), quarry.as_ref(), program.payer().as_ref()],
+        &quarry::id(),
+    );
+    let (miner_vault, _bump) =
+        Pubkey::find_program_address(&[b"MinerVault".as_ref(), miner.as_ref()], &quarry::id());
+
+    let mut instructions = vec![];
+    let miner_info = program.rpc().get_account(&miner);
+    if miner_info.is_err() {
+        instructions.push(Instruction {
+            accounts: quarry::accounts::CreateMiner {
+                authority: program.payer(),
+                miner,
+                miner_vault,
+                rewarder,
+                quarry,
+                payer: program.payer(),
+                token_mint,
+                system_program: system_program::id(),
+                token_program: spl_token::id(),
+            }
+            .to_account_metas(None),
+            data: quarry::instruction::CreateMiner {}.data(),
+            program_id: quarry::id(),
+        });
+    }
+
+    let token_account = get_or_create_ata(program, token_mint, program.payer())?;
+
+    instructions.push(Instruction {
+        accounts: quarry::accounts::UserStake {
+            authority: program.payer(),
+            miner,
+            quarry,
+            miner_vault,
+            token_account,
+            rewarder,
+            token_program: spl_token::id(),
+        }
+        .to_account_metas(None),
+        data: quarry::instruction::StakeTokens { amount }.data(),
+        program_id: quarry::id(),
+    });
+
+    let builder = program.request();
+    let builder = instructions
+        .into_iter()
+        .fold(builder, |bld, ix| bld.instruction(ix));
+
+    // let result = simulate_transaction(&builder, program, &vec![&default_keypair()]).unwrap();
+    // println!("{:?}", result);
+    // return Ok(());
+
+    let signature = builder.send()?;
+    println!("Signature {:?}", signature);
+    Ok(())
+}
+
+fn view_miner(program: &Program, token_mint: Pubkey, base: Pubkey) -> Result<()> {
+    let (rewarder, _bump) =
+        Pubkey::find_program_address(&[b"Rewarder".as_ref(), base.as_ref()], &quarry::id());
+    let (quarry, _bump) = Pubkey::find_program_address(
+        &[b"Quarry".as_ref(), rewarder.as_ref(), token_mint.as_ref()],
+        &quarry::id(),
+    );
+    let (miner, _bump) = Pubkey::find_program_address(
+        &[b"Miner".as_ref(), quarry.as_ref(), program.payer().as_ref()],
+        &quarry::id(),
+    );
+    let miner_state: quarry::Miner = program.account(miner)?;
+    println!("{:?}", miner_state);
     Ok(())
 }

@@ -7,7 +7,13 @@ members = [
     "programs/gauge",
     "programs/quarry",
     "programs/minter",
-    "cli/*"
+    "cli/gauge",
+    "cli/govern",
+    "cli/merkle_distributor",
+    "cli/minter",
+    "cli/quarry",
+    "cli/smartwallet",
+    "cli/voter",
 ]
 
 [profile.release]

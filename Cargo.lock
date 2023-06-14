@@ -1608,6 +1608,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "gauge-cli"
+version = "0.1.0"
+dependencies = [
+ "anchor-client",
+ "anchor-lang",
+ "anchor-spl",
+ "anyhow",
+ "clap 3.2.25",
+ "gauge",
+ "minter",
+ "quarry",
+ "shellexpand",
+ "solana-program",
+ "spl-token",
+ "utils-cli",
+ "voter",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2283,6 +2302,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "minter-cli"
+version = "0.1.0"
+dependencies = [
+ "anchor-client",
+ "anchor-lang",
+ "anchor-spl",
+ "anyhow",
+ "clap 3.2.25",
+ "minter",
+ "quarry",
+ "shellexpand",
+ "solana-program",
+ "spl-token",
+ "utils-cli",
+]
+
+[[package]]
 name = "mio"
 version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2743,6 +2779,24 @@ dependencies = [
  "spl-math",
  "u128",
  "vipers",
+]
+
+[[package]]
+name = "quarry-cli"
+version = "0.1.0"
+dependencies = [
+ "anchor-client",
+ "anchor-lang",
+ "anchor-spl",
+ "anyhow",
+ "clap 3.2.25",
+ "gauge",
+ "minter",
+ "quarry",
+ "shellexpand",
+ "solana-program",
+ "spl-token",
+ "utils-cli",
 ]
 
 [[package]]
@@ -4891,8 +4945,10 @@ version = "0.1.0"
 dependencies = [
  "anchor-client",
  "anchor-lang",
+ "anyhow",
  "regex",
  "shellexpand",
+ "spl-associated-token-account",
 ]
 
 [[package]]

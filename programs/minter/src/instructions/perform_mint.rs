@@ -32,6 +32,7 @@ pub fn handler(ctx: Context<PerformMint>, amount: u64) -> Result<()> {
     invariant!(minter.allowance >= amount, MinterAllowanceExceeded);
 
     let new_supply = unwrap_int!(ctx.accounts.token_mint.supply.checked_add(amount));
+    msg!("{} {}", new_supply, mint_wrapper.hard_cap);
     invariant!(new_supply <= mint_wrapper.hard_cap, HardcapExceeded);
 
     minter.allowance = unwrap_int!(minter.allowance.checked_sub(amount));

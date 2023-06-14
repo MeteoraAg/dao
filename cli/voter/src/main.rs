@@ -15,6 +15,7 @@ use clap::*;
 use solana_program::instruction::Instruction;
 use std::rc::Rc;
 use std::str::FromStr;
+use utils_cli::token::get_or_create_ata;
 
 fn main() -> Result<()> {
     let opts = Opts::parse();
@@ -190,6 +191,7 @@ fn new_escrow(program: &Program, locker: Pubkey) -> Result<()> {
 
 fn increase_locked_amount(program: &Program, locker: Pubkey, amount: u64) -> Result<()> {
     let locker_state: voter::Locker = program.account(locker)?;
+    println!("{:?}", locker_state);
     let (escrow, _bump) = Pubkey::find_program_address(
         &[
             b"Escrow".as_ref(),
@@ -198,21 +200,48 @@ fn increase_locked_amount(program: &Program, locker: Pubkey, amount: u64) -> Res
         ],
         &voter::id(),
     );
-    let escrow_tokens = get_associated_token_address(&escrow, &locker_state.token_mint);
 
-    let source_tokens = get_associated_token_address(&program.payer(), &locker_state.token_mint);
-
-    let builder = program
-        .request()
-        .accounts(voter::accounts::IncreaseLockedAmount {
+    let mut instructions = vec![];
+    let escrow_info = program.rpc().get_account(&escrow);
+    if escrow_info.is_err() {
+        instructions = vec![Instruction {
+            accounts: voter::accounts::NewEscrow {
+                locker,
+                escrow,
+                escrow_owner: program.payer(),
+                payer: program.payer(),
+                system_program: solana_program::system_program::ID,
+            }
+            .to_account_metas(None),
+            data: voter::instruction::NewEscrow {}.data(),
+            program_id: voter::id(),
+        }];
+    }
+    let escrow_tokens = get_or_create_ata(program, locker_state.token_mint, escrow)?;
+    let source_tokens = get_or_create_ata(program, locker_state.token_mint, program.payer())?;
+    instructions.push(Instruction {
+        accounts: voter::accounts::IncreaseLockedAmount {
             locker,
             escrow,
             escrow_tokens,
             source_tokens,
             payer: program.payer(),
             token_program: anchor_spl::token::ID,
-        })
-        .args(voter::instruction::IncreaseLockedAmount { amount });
+        }
+        .to_account_metas(None),
+        data: voter::instruction::IncreaseLockedAmount { amount }.data(),
+        program_id: voter::id(),
+    });
+
+    let builder = program.request();
+    let builder = instructions
+        .into_iter()
+        .fold(builder, |bld, ix| bld.instruction(ix));
+
+    // let result = simulate_transaction(&builder, program, &vec![&default_keypair()]).unwrap();
+    // println!("{:?}", result);
+    // return Ok(());
+
     let signature = builder.send()?;
     println!("Signature {:?}", signature);
     Ok(())

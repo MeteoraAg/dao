@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 clap = { version = "3.1.8", features = ["derive"] }
 minter = { path = "../../programs/minter" }
+quarry = { path = "../../programs/quarry" }
 shellexpand = "2.1.0"
 anchor-lang = "0.26.0"
 anchor-spl = "0.26.0"

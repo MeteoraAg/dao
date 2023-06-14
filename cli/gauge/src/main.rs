@@ -4,7 +4,7 @@ use crate::args::*;
 use anyhow::Ok;
 use anyhow::Result;
 use solana_program::system_program;
-// use utils_cli::*;
+use utils_cli::*;
 
 use anchor_client::anchor_lang::InstructionData;
 use anchor_client::anchor_lang::ToAccountMetas;
@@ -481,6 +481,7 @@ fn gauge_set_vote(program: &Program, weight: u32, token_mint: Pubkey, base: Pubk
         &voter::id(),
     );
 
+    let mut instructions = vec![];
     let (gauge_voter, _bump) = Pubkey::find_program_address(
         &[
             b"GaugeVoter".as_ref(),
@@ -489,23 +490,59 @@ fn gauge_set_vote(program: &Program, weight: u32, token_mint: Pubkey, base: Pubk
         ],
         &gauge::id(),
     );
+    let gauge_voter_info = program.rpc().get_account(&gauge_voter);
+    if gauge_voter_info.is_err() {
+        instructions.push(Instruction {
+            accounts: gauge::accounts::CreateGaugeVoter {
+                gauge_voter,
+                gauge_factory,
+                escrow,
+                payer: program.payer(),
+                system_program: system_program::id(),
+            }
+            .to_account_metas(None),
+            data: gauge::instruction::CreateGaugeVoter {}.data(),
+            program_id: gauge::id(),
+        });
+    }
 
     let (gauge_vote, _bump) = Pubkey::find_program_address(
         &[b"GaugeVote".as_ref(), gauge_voter.as_ref(), gauge.as_ref()],
         &gauge::id(),
     );
-
-    let builder = program
-        .request()
-        .accounts(gauge::accounts::GaugeSetVote {
+    let gauge_vote_info = program.rpc().get_account(&gauge_vote);
+    if gauge_vote_info.is_err() {
+        instructions.push(Instruction {
+            accounts: gauge::accounts::CreateGaugeVote {
+                gauge_vote,
+                gauge_voter,
+                gauge,
+                payer: program.payer(),
+                system_program: system_program::id(),
+            }
+            .to_account_metas(None),
+            data: gauge::instruction::CreateGaugeVote {}.data(),
+            program_id: gauge::id(),
+        });
+    }
+    instructions.push(Instruction {
+        accounts: gauge::accounts::GaugeSetVote {
             gauge_factory,
             escrow,
             gauge,
             gauge_voter,
             gauge_vote,
             vote_delegate: program.payer(),
-        })
-        .args(gauge::instruction::GaugeSetVote { weight });
+        }
+        .to_account_metas(None),
+        data: gauge::instruction::GaugeSetVote { weight }.data(),
+        program_id: gauge::id(),
+    });
+
+    let builder = program.request();
+    let builder = instructions
+        .into_iter()
+        .fold(builder, |bld, ix| bld.instruction(ix));
 
     let signature = builder.send()?;
     println!("Signature {:?}", signature);
@@ -563,6 +600,25 @@ fn gauge_commit_vote(program: &Program, token_mint: Pubkey, base: Pubkey) -> Res
         &gauge::id(),
     );
 
+    let mut instructions = vec![];
+    let epoch_gauge_info = program.rpc().get_account(&epoch_gauge);
+    if epoch_gauge_info.is_err() {
+        instructions.push(Instruction {
+            accounts: gauge::accounts::CreateEpochGauge {
+                gauge,
+                epoch_gauge,
+                payer: program.payer(),
+                system_program: system_program::id(),
+            }
+            .to_account_metas(None),
+            data: gauge::instruction::CreateEpochGauge {
+                voting_epoch: gauge_factory_state.voting_epoch()?,
+            }
+            .data(),
+            program_id: gauge::id(),
+        });
+    }
+
     let (epoch_gauge_voter, _bump) = Pubkey::find_program_address(
         &[
             b"EpochGaugeVoter".as_ref(),
@@ -581,9 +637,8 @@ fn gauge_commit_vote(program: &Program, token_mint: Pubkey, base: Pubkey) -> Res
         &gauge::id(),
     );
 
-    let builder = program
-        .request()
-        .accounts(gauge::accounts::GaugeCommitVote {
+    instructions.push(Instruction {
+        accounts: gauge::accounts::GaugeCommitVote {
             gauge_factory,
             gauge,
             gauge_voter,
@@ -593,8 +648,20 @@ fn gauge_commit_vote(program: &Program, token_mint: Pubkey, base: Pubkey) -> Res
             payer: program.payer(),
             epoch_gauge_vote,
             system_program: system_program::id(),
-        })
-        .args(gauge::instruction::GaugeCommitVote {});
+        }
+        .to_account_metas(None),
+        data: gauge::instruction::GaugeCommitVote {}.data(),
+        program_id: gauge::id(),
+    });
+
+    let builder = program.request();
+    let builder = instructions
+        .into_iter()
+        .fold(builder, |bld, ix| bld.instruction(ix));
+
+    // let result = simulate_transaction(&builder, program, &vec![&default_keypair()]).unwrap();
+    // println!("{:?}", result);
+    // return Ok(());
 
     let signature = builder.send()?;
     println!("Signature {:?}", signature);
@@ -758,6 +825,10 @@ fn trigger_next_epoch(program: &Program, base: Pubkey) -> Result<()> {
         .accounts(gauge::accounts::TriggerNextEpoch { gauge_factory })
         .args(gauge::instruction::TriggerNextEpoch {});
 
+    // let result = simulate_transaction(&builder, program, &vec![&default_keypair()]).unwrap();
+    // println!("{:?}", result);
+    // return Ok(());
+
     let signature = builder.send()?;
     println!("Signature {:?}", signature);
     Ok(())
@@ -778,24 +849,16 @@ fn sync_gauge(program: &Program, token_mint: Pubkey, base: Pubkey) -> Result<()>
         &gauge::id(),
     );
 
-    let (locker, _bump) =
-        Pubkey::find_program_address(&[b"Locker".as_ref(), base.as_ref()], &voter::id());
-    let (escrow, _bump) = Pubkey::find_program_address(
-        &[
-            b"Escrow".as_ref(),
-            locker.as_ref(),
-            program.payer().as_ref(),
-        ],
-        &voter::id(),
-    );
-
     let gauge_factory_state: gauge::GaugeFactory = program.account(gauge_factory)?;
 
     let (epoch_gauge, _bump) = Pubkey::find_program_address(
         &[
             b"EpochGauge".as_ref(),
             gauge.as_ref(),
-            gauge_factory_state.voting_epoch()?.to_le_bytes().as_ref(),
+            gauge_factory_state
+                .current_rewards_epoch
+                .to_le_bytes()
+                .as_ref(),
         ],
         &gauge::id(),
     );
@@ -811,6 +874,10 @@ fn sync_gauge(program: &Program, token_mint: Pubkey, base: Pubkey) -> Result<()>
             quarry_program: quarry::id(),
         })
         .args(gauge::instruction::SyncGauge {});
+
+    // let result = simulate_transaction(&builder, program, &vec![&default_keypair()]).unwrap();
+    // println!("{:?}", result);
+    // return Ok(());
 
     let signature = builder.send()?;
     println!("Signature {:?}", signature);
