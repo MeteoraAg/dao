@@ -161,11 +161,14 @@ fn create_gauge(program: &Program, token_mint: Pubkey, base: Pubkey) -> Result<(
         &gauge::id(),
     );
 
+    let gauge_state: gauge::Gauge = program.account(gauge)?;
+
     let builder = program
         .request()
         .accounts(gauge::accounts::CreateGauge {
             quarry,
             gauge,
+            amm_pool: gauge_state.amm_pool,
             gauge_factory,
             payer: program.payer(),
             system_program: system_program::id(),
@@ -321,15 +324,21 @@ fn create_epoch_gauge(
         &gauge::id(),
     );
 
+    let gauge_state: gauge::Gauge = program.account(gauge)?;
+
     let builder = program
         .request()
         .accounts(gauge::accounts::CreateEpochGauge {
+            gauge_factory,
             gauge,
             epoch_gauge,
+            amm_pool: gauge_state.amm_pool,
+            token_a_fee: gauge_state.token_a_fee_key,
+            token_b_fee: gauge_state.token_b_fee_key,
             payer: program.payer(),
             system_program: system_program::id(),
         })
-        .args(gauge::instruction::CreateEpochGauge { voting_epoch });
+        .args(gauge::instruction::CreateEpochGauge {});
     let signature = builder.send()?;
     println!("Signature {:?}", signature);
     Ok(())
@@ -564,6 +573,8 @@ fn gauge_commit_vote(program: &Program, token_mint: Pubkey, base: Pubkey) -> Res
         &gauge::id(),
     );
 
+    let gauge_state: gauge::Gauge = program.account(gauge)?;
+
     let (locker, _bump) =
         Pubkey::find_program_address(&[b"Locker".as_ref(), base.as_ref()], &voter::id());
     let (escrow, _bump) = Pubkey::find_program_address(
@@ -605,16 +616,17 @@ fn gauge_commit_vote(program: &Program, token_mint: Pubkey, base: Pubkey) -> Res
     if epoch_gauge_info.is_err() {
         instructions.push(Instruction {
             accounts: gauge::accounts::CreateEpochGauge {
+                gauge_factory,
                 gauge,
+                amm_pool: gauge_state.amm_pool,
+                token_a_fee: gauge_state.token_a_fee_key,
+                token_b_fee: gauge_state.token_b_fee_key,
                 epoch_gauge,
                 payer: program.payer(),
                 system_program: system_program::id(),
             }
             .to_account_metas(None),
-            data: gauge::instruction::CreateEpochGauge {
-                voting_epoch: gauge_factory_state.voting_epoch()?,
-            }
-            .data(),
+            data: gauge::instruction::CreateEpochGauge {}.data(),
             program_id: gauge::id(),
         });
     }

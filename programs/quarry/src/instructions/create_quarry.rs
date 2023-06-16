@@ -9,7 +9,7 @@ pub struct CreateQuarry<'info> {
         seeds = [
             b"Quarry".as_ref(),
             auth.rewarder.key().to_bytes().as_ref(),
-            token_mint.key().to_bytes().as_ref()
+            amm_pool.key().to_bytes().as_ref()
         ],
         bump,
         payer = payer,
@@ -17,12 +17,14 @@ pub struct CreateQuarry<'info> {
     )]
     pub quarry: Account<'info, Quarry>,
 
+    /// CHECK:
+    pub amm_pool: UncheckedAccount<'info>,
+
     /// [Rewarder] authority.
     pub auth: MutableRewarderWithAuthority<'info>,
 
-    /// [Mint] of the token to create a [Quarry] for.
-    pub token_mint: Account<'info, Mint>,
-
+    // /// [Mint] of the token to create a [Quarry] for.
+    // pub token_mint: Account<'info, Mint>,
     /// Payer of [Quarry] creation.
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -40,14 +42,21 @@ pub fn handler(ctx: Context<CreateQuarry>) -> Result<()> {
     let quarry = &mut ctx.accounts.quarry;
     quarry.bump = unwrap_bump!(ctx, "quarry");
 
+    #[cfg(feature = "mainnet")]
+    let amm_pool = { amm::AmmType::MeteoraAmm.get_amm(ctx.accounts.amm_pool.to_account_info())? };
+
+    #[cfg(not(feature = "mainnet"))]
+    let amm_pool = { amm::AmmType::MocAmm.get_amm(ctx.accounts.amm_pool.to_account_info())? };
+
+    quarry.token_mint_key = amm_pool.get_lp_token_account();
+
     // Set quarry params
+    quarry.amm_pool = ctx.accounts.amm_pool.key();
     quarry.index = index;
     quarry.famine_ts = i64::MAX;
     quarry.rewarder = rewarder.key();
     quarry.annual_rewards_rate = 0;
     quarry.rewards_share = 0;
-    quarry.token_mint_decimals = ctx.accounts.token_mint.decimals;
-    quarry.token_mint_key = ctx.accounts.token_mint.key();
 
     let current_ts = Clock::get()?.unix_timestamp;
     emit!(QuarryCreateEvent {

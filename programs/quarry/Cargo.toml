@@ -14,6 +14,7 @@ no-idl = []
 no-log-ix-name = []
 cpi = ["no-entrypoint"]
 default = []
+mainnet = []
 
 [dependencies]
 anchor-lang = "0.26.0"
@@ -23,7 +24,4 @@ num-traits = "0.2.14"
 minter = {path = "../minter", features = ["cpi", "no-entrypoint"]}
 spl-math = { version = "0.1.0", features = ["no-entrypoint"] }
 u128 = "0.1.0"
-
-# [dev-dependencies]
-# proptest = { version = "1.0" }
-# rand = { version = "0.8.4" }
+amm = {path = "../../libs/amm" }

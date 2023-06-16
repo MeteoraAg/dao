@@ -49,9 +49,25 @@ pub struct Gauge {
     pub gauge_factory: Pubkey,
     /// The [quarry::Quarry] being voted on.
     pub quarry: Pubkey,
+    /// The [amm::Amm] being voted on.
+    pub amm_pool: Pubkey,
+    /// token_a_fee_key of amm pool
+    pub token_a_fee_key: Pubkey,
+    /// token_b_fee_key of amm pool
+    pub token_b_fee_key: Pubkey,
     /// If true, this Gauge cannot receive any more votes
     /// and rewards shares cannot be synchronized from it.
     pub is_disabled: bool,
+    /// Total fee of token a in all epochs so far
+    pub cummulative_token_a_fee: u128,
+    /// Total fee of token b in all epochs so far
+    pub cummulative_token_b_fee: u128,
+
+    /// Total claimed fee of token a in all epochs so far
+    /// invariant: token_a_fee.amount + cummulative_claimed_token_a_fee = cummulative_token_a_fee
+    pub cummulative_claimed_token_a_fee: u128,
+    /// Total claimed fee of token b in all epochs so far
+    pub cummulative_claimed_token_b_fee: u128,
 }
 
 /// A [GaugeVoter] represents an [voter::Escrow] that can vote on gauges.
@@ -110,6 +126,37 @@ pub struct EpochGauge {
     /// The total number of power to be applied to the latest voted epoch.
     /// If this number is non-zero, vote weights cannot be changed until they are all withdrawn.
     pub total_power: u64,
+    /// Token a fee in this epoch
+    pub token_a_fee: u128,
+    /// Token b fee in this epoch
+    pub token_b_fee: u128,
+}
+
+impl EpochGauge {
+    pub fn get_allocated_fee_a(&self, epoch_gauge_voter: &EpochGaugeVoter) -> Option<u64> {
+        let token_fee = self.token_a_fee;
+        let allocated_power = epoch_gauge_voter.allocated_power as u128;
+        let total_power = self.total_power as u128;
+
+        u64::try_from(
+            token_fee
+                .checked_mul(allocated_power)?
+                .checked_div(total_power)?,
+        )
+        .ok()
+    }
+    pub fn get_allocated_fee_b(&self, epoch_gauge_voter: &EpochGaugeVoter) -> Option<u64> {
+        let token_fee = self.token_b_fee;
+        let allocated_power = epoch_gauge_voter.allocated_power as u128;
+        let total_power = self.total_power as u128;
+
+        u64::try_from(
+            token_fee
+                .checked_mul(allocated_power)?
+                .checked_div(total_power)?,
+        )
+        .ok()
+    }
 }
 
 /// An [EpochGaugeVoter] is a [GaugeVoter]'s total committed votes for a
@@ -130,6 +177,10 @@ pub struct EpochGaugeVoter {
     /// The total amount of gauge voting power that has been allocated.
     /// If this number is non-zero, vote weights cannot be changed until they are all withdrawn.
     pub allocated_power: u64,
+    /// whether user has claimed fee a
+    pub is_fee_a_claimed: bool,
+    /// whether user has claimed fee b
+    pub is_fee_b_claimed: bool,
 }
 
 /// An [EpochGaugeVote] is a user's committed votes for a given [Gauge] at a given epoch.

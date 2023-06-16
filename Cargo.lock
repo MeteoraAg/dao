@@ -90,6 +90,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "amm"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "anchor-spl",
+ "moc-amm",
+ "vipers",
+]
+
+[[package]]
 name = "anchor-attribute-access-control"
 version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1600,7 +1610,9 @@ dependencies = [
 name = "gauge"
 version = "0.1.0"
 dependencies = [
+ "amm",
  "anchor-lang",
+ "anchor-spl",
  "num-traits",
  "quarry",
  "vipers",
@@ -2331,6 +2343,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "moc-amm"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "anchor-spl",
+ "vipers",
+]
+
+[[package]]
 name = "nix"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2772,6 +2793,7 @@ dependencies = [
 name = "quarry"
 version = "0.1.0"
 dependencies = [
+ "amm",
  "anchor-lang",
  "anchor-spl",
  "minter",
@@ -2792,6 +2814,7 @@ dependencies = [
  "clap 3.2.25",
  "gauge",
  "minter",
+ "moc-amm",
  "quarry",
  "shellexpand",
  "solana-program",

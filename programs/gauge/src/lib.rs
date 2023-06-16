@@ -8,6 +8,9 @@
 use anchor_lang::prelude::*;
 use vipers::prelude::*;
 
+use anchor_spl::token::Token;
+use anchor_spl::token::{self, Mint, TokenAccount, Transfer};
+
 mod instructions;
 mod macros;
 mod state;
@@ -52,9 +55,10 @@ pub mod gauge {
     }
 
     /// Creates an [EpochGauge]. Permissionless.
+    /// Only allow create epoch for current epoch, that ensure we can accumulate fee
     #[access_control(ctx.accounts.validate())]
-    pub fn create_epoch_gauge(ctx: Context<CreateEpochGauge>, voting_epoch: u32) -> Result<()> {
-        create_epoch_gauge::handler(ctx, voting_epoch)
+    pub fn create_epoch_gauge(ctx: Context<CreateEpochGauge>) -> Result<()> {
+        create_epoch_gauge::handler(ctx)
     }
 
     /// Creates an [EpochGaugeVoter]. Permissionless.
@@ -121,6 +125,14 @@ pub mod gauge {
         sync_disabled_gauge::handler(ctx)
     }
 
+    /// Holder claim fee from amm
+    ///
+    /// Only the [voter::Escrow::vote_delegate] may call this.
+    #[access_control(ctx.accounts.validate())]
+    pub fn claim_fee(ctx: Context<ClaimFee>, voting_epoch: u32) -> Result<()> {
+        instructions::claim_fee::handler(ctx, voting_epoch)
+    }
+
     /// Closes an [EpochGaugeVote], sending lamports to a user-specified address.
     ///
     /// Only the [voter::Escrow::vote_delegate] may call this.
@@ -166,4 +178,12 @@ pub enum ErrorCode {
     CloseEpochNotElapsed,
     #[msg("You must be the vote delegate of the escrow to perform this action.")]
     UnauthorizedNotDelegate,
+    #[msg("You must claimed fee firstly to perform this action.")]
+    FeeIsNotClaimed,
+    #[msg("Fee has been claimed already.")]
+    FeeHasBeenClaimed,
+    #[msg("Token account is not correct.")]
+    TokenAccountIsNotCorrect,
+    #[msg("VotingEpoch is not correct.")]
+    VotingEpochIsNotCorrect,
 }

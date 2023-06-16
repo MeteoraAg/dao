@@ -53,6 +53,8 @@ impl Rewarder {
 pub struct Quarry {
     /// Rewarder which manages this quarry
     pub rewarder: Pubkey,
+    /// Amm pool this quarry is designated to
+    pub amm_pool: Pubkey,
     /// LP token this quarry is designated to
     pub token_mint_key: Pubkey,
     /// Bump.
@@ -61,7 +63,7 @@ pub struct Quarry {
     /// Index of the [Quarry].
     pub index: u16,
     /// Decimals on the token [Mint].
-    pub token_mint_decimals: u8, // This field is never used.
+    // pub token_mint_decimals: u8, // This field is never used.
     /// Timestamp when quarry rewards cease
     pub famine_ts: i64,
     /// Timestamp of last checkpoint

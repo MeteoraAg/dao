@@ -247,6 +247,8 @@ fn set_annual_rewards(program: &Program, new_rate: u64, base: Pubkey) -> Result<
 fn create_quarry(program: &Program, token_mint: Pubkey, base: Pubkey) -> Result<()> {
     let (rewarder, bump) =
         Pubkey::find_program_address(&[b"Rewarder".as_ref(), base.as_ref()], &quarry::id());
+    let (amm_pool, bump) =
+        Pubkey::find_program_address(&[b"moc_amm".as_ref(), base.as_ref()], &moc_amm::id());
     let (quarry, bump) = Pubkey::find_program_address(
         &[b"Quarry".as_ref(), rewarder.as_ref(), token_mint.as_ref()],
         &quarry::id(),
@@ -258,7 +260,7 @@ fn create_quarry(program: &Program, token_mint: Pubkey, base: Pubkey) -> Result<
                 admin: program.payer(),
                 rewarder,
             },
-            token_mint,
+            amm_pool,
             quarry,
             payer: program.payer(),
             system_program: system_program::id(),

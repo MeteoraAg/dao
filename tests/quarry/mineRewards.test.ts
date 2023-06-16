@@ -10,8 +10,10 @@ import {
 import { expect } from "chai";
 import {
   createAndFundWallet,
+  createMocAmm,
   getOrCreateATA,
   sleep,
+  setupTokenMintAndMinter
 } from "../utils";
 
 import { Quarry } from "../../target/types/quarry";
@@ -30,28 +32,29 @@ describe("Mine Rewards", () => {
   const dailyRewardsRate = new BN(1_000 * LAMPORTS_PER_SOL);
   const annualRewardsRate = dailyRewardsRate.mul(new BN(365));
 
-  const rewardsShare = dailyRewardsRate.div(new BN(10));
   const stakeAmount = 1_000_000000;
 
-  let keypair: web3.Keypair;
+  let adminKP: web3.Keypair;
   let wallet: Wallet;
   let stakeTokenMint: PublicKey;
+  let ammPool: PublicKey;
   let stakedMintAuthority: anchor.web3.Keypair;
 
 
   before(async () => {
     const result = await createAndFundWallet(provider.connection);
-    keypair = result.keypair;
+    adminKP = result.keypair;
     wallet = result.wallet;
     // create mint
     stakedMintAuthority = web3.Keypair.generate();
     stakeTokenMint = await createMint(
       provider.connection,
-      keypair,
+      adminKP,
       stakedMintAuthority.publicKey,
       null,
       DEFAULT_DECIMALS
     );
+    ammPool = await createMocAmm(stakeTokenMint);
   });
 
   let rewardsMint: PublicKey;
@@ -61,44 +64,9 @@ describe("Mine Rewards", () => {
   beforeEach("Initialize minter", async () => {
     minterBase = new anchor.web3.Keypair();
 
-    // create mint
-    rewardsMint = await createMint(
-      provider.connection,
-      keypair,
-      keypair.publicKey,
-      null,
-      DEFAULT_DECIMALS
-    );
-
-    const [mintWrapper, sBump] =
-      await anchor.web3.PublicKey.findProgramAddress(
-        [Buffer.from("MintWrapper"), minterBase.publicKey.toBuffer()],
-        programMinter.programId
-      );
-
-    await setAuthority(
-      provider.connection,
-      keypair,
-      rewardsMint,
-      keypair.publicKey,
-      AuthorityType.MintTokens,
-      mintWrapper,
-    );
-
-    await programMinter.methods
-      .newWrapper(new BN(DEFAULT_HARD_CAP))
-      .accounts({
-        base: minterBase.publicKey,
-        mintWrapper: mintWrapper,
-        tokenMint: rewardsMint,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        admin: provider.wallet.publicKey,
-        payer: provider.wallet.publicKey,
-        systemProgram: SystemProgram.programId,
-      }).signers([minterBase])
-      .rpc();
-
-    mintWrapperKey = mintWrapper;
+    let minterResult = await setupTokenMintAndMinter(minterBase, adminKP, DEFAULT_DECIMALS, DEFAULT_HARD_CAP);
+    rewardsMint = minterResult.rewardsMint;
+    mintWrapperKey = minterResult.mintWrapper;
   });
 
   let rewarderKey: PublicKey;
@@ -113,12 +81,12 @@ describe("Mine Rewards", () => {
     await program.methods.newRewarder().accounts({
       base: rewarderBase,
       rewarder,
-      admin: provider.wallet.publicKey,
+      admin: adminKP.publicKey,
       payer: provider.wallet.publicKey,
       systemProgram: SystemProgram.programId,
       mintWrapper: mintWrapperKey,
       rewardsTokenMint: rewardsMint,
-    }).signers([rewarderBaseKP]).rpc();
+    }).signers([rewarderBaseKP, adminKP]).rpc();
     rewarderKey = rewarder;
 
     const rewarderState = await program.account.rewarder.fetch(rewarderKey);
@@ -126,10 +94,10 @@ describe("Mine Rewards", () => {
 
     await program.methods.setAnnualRewards(annualRewardsRate).accounts({
       auth: {
-        admin: provider.wallet.publicKey,
+        admin: adminKP.publicKey,
         rewarder: rewarderKey,
       }
-    }).rpc();
+    }).signers([adminKP]).rpc();
 
     // whitelist rewarder
     const [minter, mBump] =
@@ -142,13 +110,13 @@ describe("Mine Rewards", () => {
       .accounts({
         auth: {
           mintWrapper: mintWrapperKey,
-          admin: provider.wallet.publicKey,
+          admin: adminKP.publicKey,
         },
         minterAuthority: rewarderKey,
         minter,
         payer: provider.wallet.publicKey,
         systemProgram: SystemProgram.programId,
-      })
+      }).signers([adminKP])
       .rpc();
     // set allowance
     const allowance = 100_000_000_000_000;
@@ -157,10 +125,10 @@ describe("Mine Rewards", () => {
       .accounts({
         auth: {
           mintWrapper: mintWrapperKey,
-          admin: provider.wallet.publicKey,
+          admin: adminKP.publicKey,
         },
         minter,
-      })
+      }).signers([adminKP])
       .rpc();
   });
 
@@ -170,31 +138,31 @@ describe("Mine Rewards", () => {
   beforeEach("Set up quarry and miner", async () => {
     const [quarry, sBump] =
       await anchor.web3.PublicKey.findProgramAddress(
-        [Buffer.from("Quarry"), rewarderKey.toBuffer(), stakeTokenMint.toBuffer()],
+        [Buffer.from("Quarry"), rewarderKey.toBuffer(), ammPool.toBuffer()],
         program.programId
       );
     quarryKey = quarry;
     await program.methods.createQuarry().accounts({
       quarry,
       auth: {
-        admin: provider.wallet.publicKey,
+        admin: adminKP.publicKey,
         rewarder: rewarderKey,
       },
-      tokenMint: stakeTokenMint,
+      ammPool,
       payer: provider.wallet.publicKey,
       systemProgram: SystemProgram.programId,
-    }).rpc();
+    }).signers([adminKP]).rpc();
     // mint test tokens
     let userStakeTokenAccount = await getOrCreateATA(
       stakeTokenMint,
       provider.wallet.publicKey,
-      keypair,
+      adminKP,
       provider.connection
     );
 
     await mintTo(
       provider.connection,
-      keypair,
+      adminKP,
       stakeTokenMint,
       userStakeTokenAccount,
       stakedMintAuthority,
@@ -202,9 +170,9 @@ describe("Mine Rewards", () => {
     );
     await program.methods.setRewardsShare(new BN(100)).accounts({
       quarry,
-      authority: provider.wallet.publicKey,
+      authority: adminKP.publicKey,
       rewarder: rewarderKey,
-    }).rpc();
+    }).signers([adminKP]).rpc();
 
     const [miner, mbump] =
       await anchor.web3.PublicKey.findProgramAddress(
@@ -212,13 +180,6 @@ describe("Mine Rewards", () => {
         program.programId
       );
     minerKey = miner;
-
-    // let minerVault = await getOrCreateATA(
-    //   stakeTokenMint,
-    //   miner,
-    //   keypair,
-    //   provider.connection
-    // );
 
     const [minerVault, bump] =
       await anchor.web3.PublicKey.findProgramAddress(
@@ -249,7 +210,7 @@ describe("Mine Rewards", () => {
     let userStakeTokenAccount = await getOrCreateATA(
       stakeTokenMint,
       provider.wallet.publicKey,
-      keypair,
+      adminKP,
       provider.connection
     );
     await program.methods.stakeTokens(new BN(stakeAmount)).accounts({
@@ -267,9 +228,9 @@ describe("Mine Rewards", () => {
 
     await program.methods.setRewardsShare(new BN(0)).accounts({
       quarry: quarryKey,
-      authority: provider.wallet.publicKey,
+      authority: adminKP.publicKey,
       rewarder: rewarderKey,
-    }).rpc();
+    }).signers([adminKP]).rpc();
 
     // update reward share
     await program.methods.updateQuarryRewards().accounts({
@@ -287,7 +248,7 @@ describe("Mine Rewards", () => {
     let rewardsTokenAccount = await getOrCreateATA(
       rewardsMint,
       provider.wallet.publicKey,
-      keypair,
+      adminKP,
       provider.connection
     );
 

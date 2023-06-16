@@ -13,6 +13,7 @@ import {
 import {
   createAndFundWallet,
   getOrCreateATA,
+  setupTokenMintAndMinter,
 } from "../utils";
 
 export const DEFAULT_DECIMALS = 9;
@@ -26,7 +27,7 @@ anchor.setProvider(provider);
 const program = anchor.workspace.Minter as Program<Minter>;
 
 describe("MintWrapper", () => {
-  let keypair: web3.Keypair;
+  let adminKP: web3.Keypair;
   let wallet: Wallet;
   let rewardsMint: PublicKey;
   let mintWrapperKey: PublicKey;
@@ -35,46 +36,12 @@ describe("MintWrapper", () => {
   beforeEach("Initialize mint", async () => {
     minterBase = new anchor.web3.Keypair();
     const result = await createAndFundWallet(provider.connection);
-    keypair = result.keypair;
+    adminKP = result.keypair;
     wallet = result.wallet;
 
-    // create mint
-    rewardsMint = await createMint(
-      provider.connection,
-      keypair,
-      keypair.publicKey,
-      null,
-      DEFAULT_DECIMALS
-    );
-
-    const [mintWrapper, sBump] =
-      await anchor.web3.PublicKey.findProgramAddress(
-        [Buffer.from("MintWrapper"), minterBase.publicKey.toBuffer()],
-        program.programId
-      );
-
-    await setAuthority(
-      provider.connection,
-      keypair,
-      rewardsMint,
-      keypair.publicKey,
-      AuthorityType.MintTokens,
-      mintWrapper,
-    );
-
-    await program.methods
-      .newWrapper(new BN(DEFAULT_HARD_CAP))
-      .accounts({
-        base: minterBase.publicKey,
-        mintWrapper: mintWrapper,
-        tokenMint: rewardsMint,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        admin: provider.wallet.publicKey,
-        payer: provider.wallet.publicKey,
-        systemProgram: SystemProgram.programId,
-      }).signers([minterBase])
-      .rpc();
-    mintWrapperKey = mintWrapper;
+    let minterResult = await setupTokenMintAndMinter(minterBase, adminKP, DEFAULT_DECIMALS, DEFAULT_HARD_CAP);
+    rewardsMint = minterResult.rewardsMint;
+    mintWrapperKey = minterResult.mintWrapper;
   });
 
   it("Check MintWrapper", async () => {
@@ -84,7 +51,7 @@ describe("MintWrapper", () => {
     const mintWrapperState =
       await program.account.mintWrapper.fetch(mintWrapperKey);
     expect(mintWrapperState.hardCap.toNumber()).to.equal(DEFAULT_HARD_CAP);
-    expect(mintWrapperState.admin).to.deep.equal(provider.wallet.publicKey);
+    expect(mintWrapperState.admin).to.deep.equal(adminKP.publicKey);
     expect(mintWrapperState.tokenMint).to.deep.equal(rewardsMint);
   });
 
@@ -95,16 +62,16 @@ describe("MintWrapper", () => {
       .transferAdmin()
       .accounts({
         mintWrapper: mintWrapperKey,
-        admin: provider.wallet.publicKey,
+        admin: adminKP.publicKey,
         nextAdmin: newAuthority.publicKey,
-      })
+      }).signers([adminKP])
       .rpc();
 
 
     let mintWrapperState =
       await program.account.mintWrapper.fetch(mintWrapperKey);
 
-    expect(mintWrapperState.admin).to.deep.equal(provider.wallet.publicKey);
+    expect(mintWrapperState.admin).to.deep.equal(adminKP.publicKey);
     expect(mintWrapperState.pendingAdmin).to.deep.equal(
       newAuthority.publicKey
     );
@@ -131,7 +98,7 @@ describe("MintWrapper", () => {
       .accounts({
         mintWrapper: mintWrapperKey,
         admin: newAuthority.publicKey,
-        nextAdmin: provider.wallet.publicKey,
+        nextAdmin: adminKP.publicKey,
       }).signers([newAuthority])
       .rpc();
 
@@ -139,15 +106,15 @@ describe("MintWrapper", () => {
       .acceptAdmin()
       .accounts({
         mintWrapper: mintWrapperKey,
-        pendingAdmin: provider.wallet.publicKey,
-      })
+        pendingAdmin: adminKP.publicKey,
+      }).signers([adminKP])
       .rpc();
 
 
     mintWrapperState =
       await program.account.mintWrapper.fetch(mintWrapperKey);
 
-    expect(mintWrapperState.admin).to.deep.equal(provider.wallet.publicKey);
+    expect(mintWrapperState.admin).to.deep.equal(adminKP.publicKey);
     expect(mintWrapperState.pendingAdmin).to.deep.equal(
       web3.PublicKey.default
     );
@@ -166,13 +133,13 @@ describe("MintWrapper", () => {
       .accounts({
         auth: {
           mintWrapper: mintWrapperKey,
-          admin: provider.wallet.publicKey,
+          admin: adminKP.publicKey,
         },
         minterAuthority,
         minter,
         payer: provider.wallet.publicKey,
         systemProgram: SystemProgram.programId,
-      })
+      }).signers([adminKP])
       .rpc();
 
     let minterWrapperState =
@@ -186,10 +153,10 @@ describe("MintWrapper", () => {
       .accounts({
         auth: {
           mintWrapper: mintWrapperKey,
-          admin: provider.wallet.publicKey,
+          admin: adminKP.publicKey,
         },
         minter,
-      })
+      }).signers([adminKP])
       .rpc();
 
     let minterState =
@@ -214,13 +181,13 @@ describe("MintWrapper", () => {
       .accounts({
         auth: {
           mintWrapper: mintWrapperKey,
-          admin: provider.wallet.publicKey,
+          admin: adminKP.publicKey,
         },
         minterAuthority,
         minter,
         payer: provider.wallet.publicKey,
         systemProgram: SystemProgram.programId,
-      })
+      }).signers([adminKP])
       .rpc();
 
     // set allowance
@@ -230,10 +197,10 @@ describe("MintWrapper", () => {
       .accounts({
         auth: {
           mintWrapper: mintWrapperKey,
-          admin: provider.wallet.publicKey,
+          admin: adminKP.publicKey,
         },
         minter,
-      })
+      }).signers([adminKP])
       .rpc();
 
     // remove minter
@@ -242,10 +209,10 @@ describe("MintWrapper", () => {
       .accounts({
         auth: {
           mintWrapper: mintWrapperKey,
-          admin: provider.wallet.publicKey,
+          admin: adminKP.publicKey,
         },
         minter,
-      })
+      }).signers([adminKP])
       .rpc();
     let minterState =
       await program.account.minter.fetch(minter);
@@ -271,13 +238,13 @@ describe("MintWrapper", () => {
       .accounts({
         auth: {
           mintWrapper: mintWrapperKey,
-          admin: provider.wallet.publicKey,
+          admin: adminKP.publicKey,
         },
         minterAuthority,
         minter,
         payer: provider.wallet.publicKey,
         systemProgram: SystemProgram.programId,
-      })
+      }).signers([adminKP])
       .rpc();
 
     // set allowance
@@ -287,17 +254,17 @@ describe("MintWrapper", () => {
       .accounts({
         auth: {
           mintWrapper: mintWrapperKey,
-          admin: provider.wallet.publicKey,
+          admin: adminKP.publicKey,
         },
         minter,
-      })
+      }).signers([adminKP])
       .rpc();
 
 
     let destination = await getOrCreateATA(
       minterWrapperState.tokenMint,
       provider.wallet.publicKey,
-      keypair,
+      adminKP,
       provider.connection
     );
 

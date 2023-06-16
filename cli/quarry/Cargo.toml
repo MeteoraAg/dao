@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 clap = { version = "3.1.8", features = ["derive"] }
 quarry = { path = "../../programs/quarry" }
+moc-amm = { path = "../../programs/moc-amm" }
 minter = { path = "../../programs/minter" }
 gauge = { path = "../../programs/gauge" }
 shellexpand = "2.1.0"

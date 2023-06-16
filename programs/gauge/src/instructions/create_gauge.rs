@@ -1,7 +1,5 @@
 //! Creates a [Gauge].
 
-// use vipers::assert_keys_eq;
-
 use crate::*;
 
 /// Accounts for [gauge::create_gauge].
@@ -25,7 +23,12 @@ pub struct CreateGauge<'info> {
     pub gauge_factory: Account<'info, GaugeFactory>,
 
     /// [quarry::Quarry].
+    #[account(has_one = amm_pool)]
     pub quarry: Account<'info, quarry::Quarry>,
+
+    /// [amm::Amm].
+    /// CHECK:
+    pub amm_pool: UncheckedAccount<'info>,
 
     /// Payer.
     #[account(mut)]
@@ -39,8 +42,22 @@ pub fn handler(ctx: Context<CreateGauge>) -> Result<()> {
     let gauge = &mut ctx.accounts.gauge;
     gauge.gauge_factory = ctx.accounts.gauge_factory.key();
     gauge.quarry = ctx.accounts.quarry.key();
+
     // Since this is permissionless, gauges are disabled when they are created.
     gauge.is_disabled = true;
+
+    gauge.amm_pool = ctx.accounts.quarry.amm_pool;
+    // TODO handle the case when apmm update token a fee and token b fee account
+    // Probably nothing we can do
+    #[cfg(feature = "mainnet")]
+    let amm_pool = { amm::AmmType::MeteoraAmm.get_amm(ctx.accounts.amm_pool.to_account_info())? };
+
+    #[cfg(not(feature = "mainnet"))]
+    let amm_pool = { amm::AmmType::MocAmm.get_amm(ctx.accounts.amm_pool.to_account_info())? };
+
+    let (token_a_fee, token_b_fee) = amm_pool.get_fee_accounts();
+    gauge.token_a_fee_key = token_a_fee;
+    gauge.token_b_fee_key = token_b_fee;
     Ok(())
 }
 

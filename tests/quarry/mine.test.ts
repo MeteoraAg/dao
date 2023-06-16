@@ -10,13 +10,15 @@ import {
 import { expect } from "chai";
 import invariant from "tiny-invariant";
 import {
+  setupTokenMintAndMinter,
   createAndFundWallet,
   getOrCreateATA,
+  createMocAmm,
 } from "../utils";
 
 import { Quarry } from "../../target/types/quarry";
 import { Minter } from "../../target/types/minter";
-
+// import { MocAmm } from "../../target/types/moc_amm";
 
 
 const provider = anchor.AnchorProvider.env();
@@ -24,6 +26,7 @@ anchor.setProvider(provider);
 
 const program = anchor.workspace.Quarry as Program<Quarry>;
 const programMinter = anchor.workspace.Minter as Program<Minter>;
+// const programMocAmm = anchor.workspace.MocAmm as Program<MocAmm>;
 
 export const DEFAULT_DECIMALS = 9;
 export const DEFAULT_HARD_CAP = 1_000_000_000_000_000;
@@ -34,24 +37,26 @@ describe("Mine", () => {
   const DAILY_REWARDS_RATE = new BN(1_000 * web3.LAMPORTS_PER_SOL);
   const ANNUAL_REWARDS_RATE = DAILY_REWARDS_RATE.mul(new BN(365));
 
-  let keypair: web3.Keypair;
+  let adminKP: web3.Keypair;
   let wallet: Wallet;
   let stakeTokenMint: PublicKey;
   let stakedMintAuthority: anchor.web3.Keypair;
+  let ammPool: PublicKey;
 
   before(async () => {
     const result = await createAndFundWallet(provider.connection);
-    keypair = result.keypair;
+    adminKP = result.keypair;
     wallet = result.wallet;
     // create mint
     stakedMintAuthority = web3.Keypair.generate();
     stakeTokenMint = await createMint(
       provider.connection,
-      keypair,
+      adminKP,
       stakedMintAuthority.publicKey,
       null,
       DEFAULT_DECIMALS
     );
+    ammPool = await createMocAmm(30, stakeTokenMint, adminKP);
   });
 
   let rewardsMint: PublicKey;
@@ -61,44 +66,10 @@ describe("Mine", () => {
   beforeEach("Initialize minter", async () => {
     minterBase = new anchor.web3.Keypair();
 
-    // create mint
-    rewardsMint = await createMint(
-      provider.connection,
-      keypair,
-      keypair.publicKey,
-      null,
-      DEFAULT_DECIMALS
-    );
 
-    const [mintWrapper, sBump] =
-      await anchor.web3.PublicKey.findProgramAddress(
-        [Buffer.from("MintWrapper"), minterBase.publicKey.toBuffer()],
-        programMinter.programId
-      );
-
-    await setAuthority(
-      provider.connection,
-      keypair,
-      rewardsMint,
-      keypair.publicKey,
-      AuthorityType.MintTokens,
-      mintWrapper,
-    );
-
-    await programMinter.methods
-      .newWrapper(new BN(DEFAULT_HARD_CAP))
-      .accounts({
-        base: minterBase.publicKey,
-        mintWrapper: mintWrapper,
-        tokenMint: rewardsMint,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        admin: provider.wallet.publicKey,
-        payer: provider.wallet.publicKey,
-        systemProgram: SystemProgram.programId,
-      }).signers([minterBase])
-      .rpc();
-
-    mintWrapperKey = mintWrapper;
+    let minterResult = await setupTokenMintAndMinter(minterBase, adminKP, DEFAULT_DECIMALS, DEFAULT_HARD_CAP);
+    rewardsMint = minterResult.rewardsMint;
+    mintWrapperKey = minterResult.mintWrapper;
   });
 
   describe("Rewarder", () => {
@@ -115,19 +86,19 @@ describe("Mine", () => {
       await program.methods.newRewarder().accounts({
         base: rewarderBase,
         rewarder,
-        admin: provider.wallet.publicKey,
+        admin: adminKP.publicKey,
         payer: provider.wallet.publicKey,
         systemProgram: SystemProgram.programId,
         mintWrapper: mintWrapperKey,
         rewardsTokenMint: rewardsMint,
-      }).signers([rewarderBaseKP]).rpc();
+      }).signers([rewarderBaseKP, adminKP]).rpc();
       rewarderKey = rewarder;
     });
 
     it("Is initialized!", async () => {
       const rewarder = await program.account.rewarder.fetch(rewarderKey);
 
-      expect(rewarder.admin).to.deep.equal(provider.wallet.publicKey);
+      expect(rewarder.admin).to.deep.equal(adminKP.publicKey);
       expect(rewarder.annualRewardsRate.toNumber()).to.equal(0);
       expect(rewarder.numQuarries).to.equal(0);
       expect(rewarder.totalRewardsShares.toNumber()).to.deep.equal(0);
@@ -136,10 +107,10 @@ describe("Mine", () => {
     it("Set daily rewards rate", async () => {
       await program.methods.setAnnualRewards(ANNUAL_REWARDS_RATE).accounts({
         auth: {
-          admin: provider.wallet.publicKey,
+          admin: adminKP.publicKey,
           rewarder: rewarderKey,
         }
-      }).rpc();
+      }).signers([adminKP]).rpc();
       const rewarder = await program.account.rewarder.fetch(rewarderKey);
       expect(rewarder.annualRewardsRate.toNumber()).to.deep.equal(ANNUAL_REWARDS_RATE.toNumber());
     });
@@ -148,12 +119,12 @@ describe("Mine", () => {
       const newAdmin = web3.Keypair.generate();
 
       await program.methods.transferAdmin(newAdmin.publicKey).accounts({
-        admin: provider.wallet.publicKey,
+        admin: adminKP.publicKey,
         rewarder: rewarderKey,
-      }).rpc();
+      }).signers([adminKP]).rpc();
 
       let rewarder = await program.account.rewarder.fetch(rewarderKey);
-      expect(rewarder.admin).to.deep.equal(provider.wallet.publicKey);
+      expect(rewarder.admin).to.deep.equal(adminKP.publicKey);
       expect(rewarder.pendingAdmin).to.deep.equal(newAdmin.publicKey);
 
       await program.methods.acceptAdmin().accounts({
@@ -167,17 +138,17 @@ describe("Mine", () => {
       expect(rewarder.pendingAdmin).to.deep.equal(web3.PublicKey.default);
 
       // transfer back
-      await program.methods.transferAdmin(provider.wallet.publicKey).accounts({
+      await program.methods.transferAdmin(adminKP.publicKey).accounts({
         admin: newAdmin.publicKey,
         rewarder: rewarderKey,
       }).signers([newAdmin]).rpc();
       await program.methods.acceptAdmin().accounts({
-        admin: provider.wallet.publicKey,
+        admin: adminKP.publicKey,
         rewarder: rewarderKey,
-      }).rpc();
+      }).signers([adminKP]).rpc();
 
       rewarder = await program.account.rewarder.fetch(rewarderKey);
-      expect(rewarder.admin).to.deep.equal(provider.wallet.publicKey);
+      expect(rewarder.admin).to.deep.equal(adminKP.publicKey);
       expect(rewarder.pendingAdmin).to.deep.equal(web3.PublicKey.default);
     });
   });
@@ -198,43 +169,45 @@ describe("Mine", () => {
       await program.methods.newRewarder().accounts({
         base: rewarderBase,
         rewarder,
-        admin: provider.wallet.publicKey,
+        admin: adminKP.publicKey,
         payer: provider.wallet.publicKey,
         systemProgram: SystemProgram.programId,
         mintWrapper: mintWrapperKey,
         rewardsTokenMint: rewardsMint,
-      }).signers([rewarderBaseKP]).rpc();
+      }).signers([rewarderBaseKP, adminKP]).rpc();
 
       rewarderKey = rewarder;
 
       await program.methods.setAnnualRewards(ANNUAL_REWARDS_RATE).accounts({
         auth: {
-          admin: provider.wallet.publicKey,
+          admin: adminKP.publicKey,
           rewarder: rewarderKey,
         }
-      }).rpc();
+      }).signers([adminKP]).rpc();
       const rewarderState = await program.account.rewarder.fetch(rewarderKey);
       expect(rewarderState.annualRewardsRate.toNumber()).to.deep.equal(ANNUAL_REWARDS_RATE.toNumber());
     });
+
+
 
     describe("Single quarry", () => {
       beforeEach("Create a new quarry", async () => {
         const [quarry, sBump] =
           await anchor.web3.PublicKey.findProgramAddress(
-            [Buffer.from("Quarry"), rewarderKey.toBuffer(), stakeTokenMint.toBuffer()],
+            [Buffer.from("Quarry"), rewarderKey.toBuffer(), ammPool.toBuffer()],
             program.programId
           );
 
         await program.methods.createQuarry().accounts({
           quarry,
           auth: {
-            admin: provider.wallet.publicKey,
+            admin: adminKP.publicKey,
             rewarder: rewarderKey,
           },
-          tokenMint: stakeTokenMint,
+          ammPool,
           payer: provider.wallet.publicKey,
           systemProgram: SystemProgram.programId,
-        }).rpc();
+        }).signers([adminKP]).rpc();
 
         let rewarderState = await program.account.rewarder.fetch(rewarderKey);
         expect(rewarderState.numQuarries).to.deep.equal(1);
@@ -251,9 +224,9 @@ describe("Mine", () => {
       it("Set rewards share", async () => {
         await program.methods.setRewardsShare(quarryRewardsShare).accounts({
           quarry: quarryKey,
-          authority: provider.wallet.publicKey,
+          authority: adminKP.publicKey,
           rewarder: rewarderKey,
-        }).rpc();
+        }).signers([adminKP]).rpc();
         let rewarderState = await program.account.rewarder.fetch(rewarderKey);
         expect(rewarderState.totalRewardsShares.toNumber()).to.deep.equal(quarryRewardsShare.toNumber());
 
@@ -285,10 +258,10 @@ describe("Mine", () => {
         await program.methods.setFamine(now).accounts({
           quarry: quarryKey,
           auth: {
-            admin: provider.wallet.publicKey,
+            admin: adminKP.publicKey,
             rewarder: rewarderKey,
           },
-        }).rpc();
+        }).signers([adminKP]).rpc();
 
         let quarryState = await program.account.quarry.fetch(quarryKey);
         expect(quarryState.famineTs.toNumber()).deep.equal(now.toNumber());
@@ -298,14 +271,16 @@ describe("Mine", () => {
         const fakeAuthority = web3.Keypair.generate();
         const nextMint = await createMint(
           provider.connection,
-          keypair,
-          keypair.publicKey,
+          adminKP,
+          adminKP.publicKey,
           null,
           DEFAULT_DECIMALS
         );
+        let ammPool = await createMocAmm(30, nextMint, adminKP);
+
         const [quarry, sBump] =
           await anchor.web3.PublicKey.findProgramAddress(
-            [Buffer.from("Quarry"), rewarderKey.toBuffer(), nextMint.toBuffer()],
+            [Buffer.from("Quarry"), rewarderKey.toBuffer(), ammPool.toBuffer()],
             program.programId
           );
 
@@ -316,7 +291,7 @@ describe("Mine", () => {
               admin: fakeAuthority.publicKey,
               rewarder: rewarderKey,
             },
-            tokenMint: nextMint,
+            ammPool,
             payer: provider.wallet.publicKey,
             systemProgram: SystemProgram.programId,
           }).signers([fakeAuthority]).rpc();
@@ -327,9 +302,10 @@ describe("Mine", () => {
       });
 
       it("Invalid PDA", async () => {
+        let nonAmmKey = Keypair.generate().publicKey;
         const [quarry, sBump] =
           await anchor.web3.PublicKey.findProgramAddress(
-            [Buffer.from("Quarry"), rewarderKey.toBuffer(), Keypair.generate().publicKey.toBuffer()],
+            [Buffer.from("Quarry"), rewarderKey.toBuffer(), nonAmmKey.toBuffer()],
             program.programId
           );
 
@@ -337,13 +313,13 @@ describe("Mine", () => {
           await program.methods.createQuarry().accounts({
             quarry,
             auth: {
-              admin: provider.wallet.publicKey,
+              admin: adminKP.publicKey,
               rewarder: rewarderKey,
             },
-            tokenMint: stakeTokenMint,
+            ammPool: nonAmmKey,
             payer: provider.wallet.publicKey,
             systemProgram: SystemProgram.programId,
-          }).rpc();
+          }).signers([adminKP]).rpc();
           expect(1).to.deep.equal(0);
         } catch (e) {
           console.log("cannot create quarry with invalid PDA")
@@ -352,7 +328,7 @@ describe("Mine", () => {
     });
 
     describe("Multiple quarries", () => {
-      const tokens: PublicKey[] = [];
+      const ammPools: PublicKey[] = [];
 
       beforeEach("Create quarries", async () => {
         let totalRewardsShare = new BN(0);
@@ -360,36 +336,39 @@ describe("Mine", () => {
         for (let i = 0; i < numQuarries; i++) {
           const mint = await createMint(
             provider.connection,
-            keypair,
-            keypair.publicKey,
+            adminKP,
+            adminKP.publicKey,
             null,
             DEFAULT_DECIMALS
           );
-          tokens.push(mint);
           const rewardsShare = new BN(i + 1);
+
+          let ammPool = await createMocAmm(30, mint, adminKP);
+
+          ammPools.push(ammPool);
 
           const [quarry, sBump] =
             await anchor.web3.PublicKey.findProgramAddress(
-              [Buffer.from("Quarry"), rewarderKey.toBuffer(), mint.toBuffer()],
+              [Buffer.from("Quarry"), rewarderKey.toBuffer(), ammPool.toBuffer()],
               program.programId
             );
 
           await program.methods.createQuarry().accounts({
             quarry,
             auth: {
-              admin: provider.wallet.publicKey,
+              admin: adminKP.publicKey,
               rewarder: rewarderKey,
             },
-            tokenMint: mint,
+            ammPool,
             payer: provider.wallet.publicKey,
             systemProgram: SystemProgram.programId,
-          }).rpc();
+          }).signers([adminKP]).rpc();
 
           await program.methods.setRewardsShare(rewardsShare).accounts({
             quarry,
-            authority: provider.wallet.publicKey,
+            authority: adminKP.publicKey,
             rewarder: rewarderKey,
-          }).rpc();
+          }).signers([adminKP]).rpc();
 
           totalRewardsShare = totalRewardsShare.add(rewardsShare);
         }
@@ -402,7 +381,7 @@ describe("Mine", () => {
         for (let i = 0; i < numQuarries; i++) {
           const [quarry, sBump] =
             await anchor.web3.PublicKey.findProgramAddress(
-              [Buffer.from("Quarry"), rewarderKey.toBuffer(), tokens[i].toBuffer()],
+              [Buffer.from("Quarry"), rewarderKey.toBuffer(), ammPools[i].toBuffer()],
               program.programId
             );
           await program.methods.updateQuarryRewards().accounts({
@@ -416,28 +395,28 @@ describe("Mine", () => {
         const multiplier = new BN(10);
         const nextAnnualRewardsRate = ANNUAL_REWARDS_RATE.mul(multiplier);
         const prevRates = await Promise.all(
-          tokens.map(async (t) => {
+          ammPools.map(async (t) => {
             const [quarry, sBump] =
               await anchor.web3.PublicKey.findProgramAddress(
                 [Buffer.from("Quarry"), rewarderKey.toBuffer(), t.toBuffer()],
                 program.programId
               );
             let quarryState = await program.account.quarry.fetch(quarry);
-            return { token: t, rate: quarryState.annualRewardsRate };
+            return { ammPool: t, rate: quarryState.annualRewardsRate };
           })
         );
         // update annual reward
         await program.methods.setAnnualRewards(nextAnnualRewardsRate).accounts({
           auth: {
-            admin: provider.wallet.publicKey,
+            admin: adminKP.publicKey,
             rewarder: rewarderKey,
           }
-        }).rpc();
+        }).signers([adminKP]).rpc();
         // sync all quarry rewards
-        for (let i = 0; i < tokens.length; i++) {
+        for (let i = 0; i < ammPools.length; i++) {
           const [quarry, sBump] =
             await anchor.web3.PublicKey.findProgramAddress(
-              [Buffer.from("Quarry"), rewarderKey.toBuffer(), tokens[i].toBuffer()],
+              [Buffer.from("Quarry"), rewarderKey.toBuffer(), ammPools[i].toBuffer()],
               program.programId
             );
           await program.methods.updateQuarryRewards().accounts({
@@ -448,20 +427,20 @@ describe("Mine", () => {
         let rewarderState = await program.account.rewarder.fetch(rewarderKey);
         expect(rewarderState.annualRewardsRate.toNumber()).to.deep.equal(nextAnnualRewardsRate.toNumber());
         let sumRewardsPerAnnum = new BN(0);
-        for (const token of tokens) {
+        for (const ammPool of ammPools) {
           const [quarry, sBump] =
             await anchor.web3.PublicKey.findProgramAddress(
-              [Buffer.from("Quarry"), rewarderKey.toBuffer(), token.toBuffer()],
+              [Buffer.from("Quarry"), rewarderKey.toBuffer(), ammPool.toBuffer()],
               program.programId
             );
           let quarryState = await program.account.quarry.fetch(quarry);
 
           const nextRate = quarryState.annualRewardsRate;
           sumRewardsPerAnnum = sumRewardsPerAnnum.add(nextRate);
-          const prevRate = prevRates.find((r) => r.token.equals(token))?.rate;
+          const prevRate = prevRates.find((r) => r.ammPool.equals(ammPool))?.rate;
           invariant(
             prevRate,
-            `prev rate not found for token ${token.toString()}`
+            `prev rate not found for ammPool ${ammPool.toString()}`
           );
 
           // Epsilon is 10
@@ -481,15 +460,15 @@ describe("Mine", () => {
         // update annual reward
         await program.methods.setAnnualRewards(ANNUAL_REWARDS_RATE).accounts({
           auth: {
-            admin: provider.wallet.publicKey,
+            admin: adminKP.publicKey,
             rewarder: rewarderKey,
           }
-        }).rpc();
+        }).signers([adminKP]).rpc();
         // sync all quarry rewards
-        for (let i = 0; i < tokens.length; i++) {
+        for (let i = 0; i < ammPools.length; i++) {
           const [quarry, sBump] =
             await anchor.web3.PublicKey.findProgramAddress(
-              [Buffer.from("Quarry"), rewarderKey.toBuffer(), tokens[i].toBuffer()],
+              [Buffer.from("Quarry"), rewarderKey.toBuffer(), ammPools[i].toBuffer()],
               program.programId
             );
           await program.methods.updateQuarryRewards().accounts({
@@ -498,20 +477,20 @@ describe("Mine", () => {
           }).rpc();
         }
 
-        for (const token of tokens) {
+        for (const ammPool of ammPools) {
           const [quarry, sBump] =
             await anchor.web3.PublicKey.findProgramAddress(
-              [Buffer.from("Quarry"), rewarderKey.toBuffer(), token.toBuffer()],
+              [Buffer.from("Quarry"), rewarderKey.toBuffer(), ammPool.toBuffer()],
               program.programId
             );
           let quarryState = await program.account.quarry.fetch(quarry);
 
           const nextRate = quarryState.annualRewardsRate;
           sumRewardsPerAnnum = sumRewardsPerAnnum.add(nextRate);
-          const prevRate = prevRates.find((r) => r.token.equals(token))?.rate;
+          const prevRate = prevRates.find((r) => r.ammPool.equals(ammPool))?.rate;
           invariant(
             prevRate,
-            `prev rate not found for token ${token.toString()}`
+            `prev rate not found for ammPool ${ammPool.toString()}`
           );
 
           expect(nextRate.toNumber()).to.deep.equal(prevRate.toNumber());
@@ -536,37 +515,37 @@ describe("Mine", () => {
       await program.methods.newRewarder().accounts({
         base: rewarderBase,
         rewarder,
-        admin: provider.wallet.publicKey,
+        admin: adminKP.publicKey,
         payer: provider.wallet.publicKey,
         systemProgram: SystemProgram.programId,
         mintWrapper: mintWrapperKey,
         rewardsTokenMint: rewardsMint,
-      }).signers([rewarderBaseKP]).rpc();
+      }).signers([rewarderBaseKP, adminKP]).rpc();
       rewarderKey = rewarder;
 
       await program.methods.setAnnualRewards(ANNUAL_REWARDS_RATE).accounts({
         auth: {
-          admin: provider.wallet.publicKey,
+          admin: adminKP.publicKey,
           rewarder: rewarderKey,
         }
-      }).rpc();
+      }).signers([adminKP]).rpc();
 
       const [quarry, bump] =
         await anchor.web3.PublicKey.findProgramAddress(
-          [Buffer.from("Quarry"), rewarderKey.toBuffer(), stakeTokenMint.toBuffer()],
+          [Buffer.from("Quarry"), rewarderKey.toBuffer(), ammPool.toBuffer()],
           program.programId
         );
 
       await program.methods.createQuarry().accounts({
         quarry,
         auth: {
-          admin: provider.wallet.publicKey,
+          admin: adminKP.publicKey,
           rewarder: rewarderKey,
         },
-        tokenMint: stakeTokenMint,
+        ammPool,
         payer: provider.wallet.publicKey,
         systemProgram: SystemProgram.programId,
-      }).rpc();
+      }).signers([adminKP]).rpc();
 
       quarryKey = quarry
     });
@@ -574,7 +553,7 @@ describe("Mine", () => {
     beforeEach("Create miner", async () => {
       const [quarry, qbump] =
         await anchor.web3.PublicKey.findProgramAddress(
-          [Buffer.from("Quarry"), rewarderKey.toBuffer(), stakeTokenMint.toBuffer()],
+          [Buffer.from("Quarry"), rewarderKey.toBuffer(), ammPool.toBuffer()],
           program.programId
         );
       const [miner, mbump] =
@@ -622,13 +601,13 @@ describe("Mine", () => {
       let userStakeTokenAccount = await getOrCreateATA(
         stakeTokenMint,
         provider.wallet.publicKey,
-        keypair,
+        adminKP,
         provider.connection
       );
 
       await mintTo(
         provider.connection,
-        keypair,
+        adminKP,
         stakeTokenMint,
         userStakeTokenAccount,
         stakedMintAuthority,

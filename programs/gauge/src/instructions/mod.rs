@@ -1,3 +1,4 @@
+pub mod claim_fee;
 pub mod close_epoch_gauge_vote;
 pub mod create_epoch_gauge;
 pub mod create_gauge;
@@ -15,6 +16,7 @@ pub mod sync_disabled_gauge;
 pub mod sync_gauge;
 pub mod trigger_next_epoch;
 
+pub use claim_fee::*;
 pub use close_epoch_gauge_vote::*;
 pub use create_epoch_gauge::*;
 pub use create_gauge::*;

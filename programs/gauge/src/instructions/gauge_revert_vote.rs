@@ -5,19 +5,19 @@ use crate::*;
 /// Accounts for [gauge::gauge_revert_vote].
 #[derive(Accounts)]
 pub struct GaugeRevertVote<'info> {
-    pub gauge_factory: Account<'info, GaugeFactory>,
-    pub gauge: Account<'info, Gauge>,
-    pub gauge_voter: Account<'info, GaugeVoter>,
-    pub gauge_vote: Account<'info, GaugeVote>,
+    pub gauge_factory: Box<Account<'info, GaugeFactory>>,
+    pub gauge: Box<Account<'info, Gauge>>,
+    pub gauge_voter: Box<Account<'info, GaugeVoter>>,
+    pub gauge_vote: Box<Account<'info, GaugeVote>>,
 
     #[account(mut)]
-    pub epoch_gauge: Account<'info, EpochGauge>,
+    pub epoch_gauge: Box<Account<'info, EpochGauge>>,
     #[account(mut)]
-    pub epoch_gauge_voter: Account<'info, EpochGaugeVoter>,
+    pub epoch_gauge_voter: Box<Account<'info, EpochGaugeVoter>>,
 
     /// The escrow.
     #[account(has_one = vote_delegate @ crate::ErrorCode::UnauthorizedNotDelegate)]
-    pub escrow: Account<'info, voter::Escrow>,
+    pub escrow: Box<Account<'info, voter::Escrow>>,
     /// The vote delegate.
     pub vote_delegate: Signer<'info>,
 
@@ -26,7 +26,7 @@ pub struct GaugeRevertVote<'info> {
         mut,
         close = payer,
     )]
-    pub epoch_gauge_vote: Account<'info, EpochGaugeVote>,
+    pub epoch_gauge_vote: Box<Account<'info, EpochGaugeVote>>,
 
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -58,7 +58,7 @@ pub fn handler(ctx: Context<GaugeRevertVote>) -> Result<()> {
 
 impl<'info> Validate<'info> for GaugeRevertVote<'info> {
     fn validate(&self) -> Result<()> {
-        assert_keys_eq!(self.gauge_factory, self.gauge.gauge_factory);
+        // assert_keys_eq!(self.gauge_factory, self.gauge.gauge_factory);
         let voting_epoch = self.gauge_factory.voting_epoch()?;
         invariant!(
             self.epoch_gauge.voting_epoch == voting_epoch,

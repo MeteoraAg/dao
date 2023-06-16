@@ -7,6 +7,7 @@ members = [
     "programs/gauge",
     "programs/quarry",
     "programs/minter",
+    "programs/moc-amm",
     "cli/gauge",
     "cli/govern",
     "cli/merkle_distributor",
