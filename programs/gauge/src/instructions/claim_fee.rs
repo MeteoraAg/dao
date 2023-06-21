@@ -6,10 +6,10 @@ use crate::*;
 #[derive(Accounts)]
 #[instruction(voting_epoch: u32)]
 pub struct ClaimFee<'info> {
-    #[account(mut, constraint = epoch_gauge_voter.voting_epoch == voting_epoch)]
+    #[account(mut, has_one = gauge_voter, constraint = epoch_gauge_voter.voting_epoch == voting_epoch)]
     pub epoch_gauge_voter: Box<Account<'info, EpochGaugeVoter>>,
 
-    #[account(mut, constraint = epoch_gauge_voter.voting_epoch == voting_epoch, has_one = gauge)]
+    #[account(constraint = epoch_gauge_voter.voting_epoch == voting_epoch, has_one = gauge)]
     pub epoch_gauge: Box<Account<'info, EpochGauge>>,
 
     /// The [GaugeFactory].

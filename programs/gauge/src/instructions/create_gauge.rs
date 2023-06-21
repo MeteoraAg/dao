@@ -58,6 +58,13 @@ pub fn handler(ctx: Context<CreateGauge>) -> Result<()> {
     let (token_a_fee, token_b_fee) = amm_pool.get_fee_accounts();
     gauge.token_a_fee_key = token_a_fee;
     gauge.token_b_fee_key = token_b_fee;
+
+    emit!(GaugeCreateEvent {
+        gauge_factory: ctx.accounts.gauge.gauge_factory,
+        quarry: ctx.accounts.gauge.quarry,
+        amm_pool: ctx.accounts.amm_pool.key(),
+    });
+
     Ok(())
 }
 
@@ -75,12 +82,9 @@ pub struct GaugeCreateEvent {
     /// The [GaugeFactory].
     pub gauge_factory: Pubkey,
     #[index]
-    /// The Rewarder.
-    pub rewarder: Pubkey,
+    /// The Amm pool.
+    pub amm_pool: Pubkey,
     #[index]
     /// The [quarry::Quarry] being voted on.
     pub quarry: Pubkey,
-    #[index]
-    /// Owner of the Escrow of the [GaugeVoter].
-    pub gauge_voter_owner: Pubkey,
 }

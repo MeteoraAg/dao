@@ -3,7 +3,7 @@ import { Program, web3 } from "@project-serum/anchor";
 import { TOKEN_PROGRAM_ID, createMint } from "@solana/spl-token";
 
 import { Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
-import { expect } from "chai";
+import { assert, expect } from "chai";
 import { Gauge } from "../../target/types/gauge";
 import { Minter } from "../../target/types/minter";
 import { Quarry } from "../../target/types/quarry";
@@ -35,7 +35,11 @@ import {
     claimBFeeInVotingEpoch,
     getEpochGaugeByVotingEpoch,
     setupVoterAndLockAmount,
-    getOrCreateVoterGauge
+    getOrCreateVoterGauge,
+    createBribe,
+    claimBribe,
+    getOrCreateEpochGaugeVoterByVotingEpoch,
+    clawbackBribe
 } from "./utils";
 import { MocAmm } from "../../target/types/moc_amm";
 
@@ -58,7 +62,7 @@ export const DEFAULT_HARD_CAP = 1_000_000_000_000_000;
 
 const AMM_FEE = 10; // 10 bps
 
-describe("Claim fee Gauge", () => {
+describe("Bribe Gauge", () => {
     // should be smart wallet
     const adminKP = Keypair.generate();
 
@@ -328,168 +332,57 @@ describe("Claim fee Gauge", () => {
         gaugeVote = result.gaugeVote;
     });
 
-    it("A voter claim all fee", async () => {
-        // simulate swap to get some fee
-        let swapAAmount = 1000000;
-        await simulateSwapAtoB(ammPool, swapAAmount, adminKP);
-        var tokenAFeeBalance = await provider.connection
-            .getTokenAccountBalance(tokenAFee);
-        expect(Number(tokenAFeeBalance.value.amount)).to.deep.equal(swapAAmount * AMM_FEE / 10000);
+    it("A voter claim bribe", async () => {
+        var gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
+        expect(gaugeFactoryState.currentRewardsEpoch).equal(0);
 
-        // vote and earn fee
+        // trigger epoch to vote and earn bribe
         await programGauge.methods
             .triggerNextEpoch()
             .accounts({
                 gaugeFactory,
             })
             .rpc();
-        await getOrCreateEpochGaugeForCurrentEpoch(gauge, programGauge);
-
-        await setVote(gauge, 50, voterKP, programGauge, programVoter);
-        // prepare epoch
-        await getOrCreateEpochGaugeVoterForCurrentEpoch(gauge, voterKP.publicKey, programGauge, programVoter)
-        // commit votes            
-        await getOrCreateEpochGaugeVoteByCurrentEpoch(gauge, voterKP.publicKey, programGauge, programVoter);
-
-        // // wait for next epoch
-        await sleep(TEST_EPOCH_SECONDS * 1_000 + 500);
-        // trigger next epoch
-        await programGauge.methods
-            .triggerNextEpoch()
-            .accounts({
-                gaugeFactory,
-            })
-            .rpc();
-        let gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-        expect(gaugeFactoryState.currentRewardsEpoch).equal(2);
-
-        // claim some fee in epoch 2
-        await claimAFeeInVotingEpoch(gauge, voterKP, 2, programGauge, programVoter, programMocAmm);
-
-        var tokenAFeeBalance = await provider.connection
-            .getTokenAccountBalance(tokenAFee);
-        expect(Number(tokenAFeeBalance.value.amount)).to.deep.equal(0);
-
-        const destTokenAccount = await getOrCreateATA(
-            tokenAMint,
-            voterKP.publicKey,
-            voterKP,
-            provider.connection
-        );
-
-        var destTokenAccountBalance = await provider.connection
-            .getTokenAccountBalance(destTokenAccount);
-        expect(Number(destTokenAccountBalance.value.amount)).to.deep.equal(swapAAmount * AMM_FEE / 10000);
-
-
-        let epochGaugeVoter = await getEpochGaugeVoterForVotingEpoch(gauge, voterKP.publicKey, 2, programGauge, programVoter);
-        let epochGaugeVoterState = await programGauge.account.epochGaugeVoter.fetch(epochGaugeVoter);
-        expect(epochGaugeVoterState.isFeeAClaimed).equal(true);
-
-        await assertEpochFee(gauge);
-
-        // cannot claim again
-        try {
-            await claimAFeeInVotingEpoch(gauge, voterKP, 2, programGauge, programVoter, programMocAmm);
-            expect(1).equal(0)
-        } catch (e) {
-            console.log("Cannot claim in the same epoch")
-        }
-
-        // simulate swap to get some fee
-        let swapBAmount = 1000000;
-        await simulateSwapBtoA(ammPool, swapBAmount, adminKP);
-        var tokenBFeeBalance = await provider.connection
-            .getTokenAccountBalance(tokenBFee);
-        expect(Number(tokenBFeeBalance.value.amount)).to.deep.equal(swapBAmount * AMM_FEE / 10000);
-
-        await getOrCreateEpochGaugeForCurrentEpoch(gauge, programGauge);
-
-        await assertEpochFee(gauge);
-
-        await setVote(gauge, 50, voterKP, programGauge, programVoter);
-        // prepare epoch
-        await getOrCreateEpochGaugeVoterForCurrentEpoch(gauge, voterKP.publicKey, programGauge, programVoter)
-        // commit votes            
-        await getOrCreateEpochGaugeVoteByCurrentEpoch(gauge, voterKP.publicKey, programGauge, programVoter);
-
-
-        // // wait for next epoch
-        await sleep(TEST_EPOCH_SECONDS * 1_000 + 500);
-
-        // trigger next epoch
-        await programGauge.methods
-            .triggerNextEpoch()
-            .accounts({
-                gaugeFactory,
-            })
-            .rpc();
-        gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-        expect(gaugeFactoryState.currentRewardsEpoch).equal(3);
-
-        // claim some fee in epoch 3
-        await claimBFeeInVotingEpoch(gauge, voterKP, 3, programGauge, programVoter, programMocAmm);
-
-        var tokenBFeeBalance = await provider.connection
-            .getTokenAccountBalance(tokenBFee);
-        expect(Number(tokenAFeeBalance.value.amount)).to.deep.equal(0);
-
-        const destTokenBAccount = await getOrCreateATA(
-            tokenBMint,
-            voterKP.publicKey,
-            voterKP,
-            provider.connection
-        );
-
-        var destTokenBAccountBalance = await provider.connection
-            .getTokenAccountBalance(destTokenBAccount);
-        expect(Number(destTokenBAccountBalance.value.amount)).to.deep.equal(swapBAmount * AMM_FEE / 10000);
-
-
-        epochGaugeVoter = await getEpochGaugeVoterForVotingEpoch(gauge, voterKP.publicKey, 3, programGauge, programVoter);
-        epochGaugeVoterState = await programGauge.account.epochGaugeVoter.fetch(epochGaugeVoter);
-        expect(epochGaugeVoterState.isFeeBClaimed).equal(true);
-
-        await assertEpochFee(gauge);
-    });
-
-    it("A voter claim all fee when an epoch is skipped", async () => {
-        // simulate swap to get some fee
-        let swapAAmount = 1000000;
-        await simulateSwapAtoB(ammPool, swapAAmount, adminKP);
-        var tokenAFeeBalance = await provider.connection
-            .getTokenAccountBalance(tokenAFee);
-        expect(Number(tokenAFeeBalance.value.amount)).to.deep.equal(swapAAmount * AMM_FEE / 10000);
-
-        await programGauge.methods
-            .triggerNextEpoch()
-            .accounts({
-                gaugeFactory,
-            })
-            .rpc();
-        let gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
+        var gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
         expect(gaugeFactoryState.currentRewardsEpoch).equal(1);
 
-        // // wait for next epoch
-        await sleep(TEST_EPOCH_SECONDS * 1_000 + 500);
-
-        // trigger next epoch
-        await programGauge.methods
-            .triggerNextEpoch()
-            .accounts({
-                gaugeFactory,
-            })
-            .rpc();
-        gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-        expect(gaugeFactoryState.currentRewardsEpoch).equal(2);
-
         await getOrCreateEpochGaugeForCurrentEpoch(gauge, programGauge);
-
         await setVote(gauge, 50, voterKP, programGauge, programVoter);
         // prepare epoch
         await getOrCreateEpochGaugeVoterForCurrentEpoch(gauge, voterKP.publicKey, programGauge, programVoter)
+
         // commit votes            
         await getOrCreateEpochGaugeVoteByCurrentEpoch(gauge, voterKP.publicKey, programGauge, programVoter);
+
+        // create bribe
+        // create bribe from epoch 3 to 5
+        let bribeEpochEnd = 5;
+        let rewardEachEpoch = 10_000;
+
+        let bribeResult = await createBribe(gauge, adminKP, bribeEpochEnd, rewardEachEpoch, programGauge);
+
+        let bribeState = await programGauge.account.bribe.fetch(bribeResult.bribe);
+
+        expect(bribeState.bribeRewardsEpochStart).equal(3);
+        expect(bribeState.bribeRewardsEpochEnd).equal(bribeEpochEnd);
+        expect(bribeState.rewardEachEpoch.toNumber()).equal(rewardEachEpoch);
+
+        let [tokenAccountVault, eBump] = web3.PublicKey.findProgramAddressSync(
+            [Buffer.from("BribeVault"), bribeResult.bribe.toBytes()],
+            programGauge.programId
+        );
+
+        var tokenAccountVaultBalance = await provider.connection
+            .getTokenAccountBalance(tokenAccountVault);
+        expect(Number(tokenAccountVaultBalance.value.amount)).to.deep.equal(rewardEachEpoch * 3);
+
+        // cannot claim bribe yet
+        try {
+            await claimBribe(bribeResult.bribe, voterKP, 3, programGauge, programVoter);
+            expect(1).equal(0);
+        } catch (e) {
+            console.log("Cannot claim bribe yet");
+        }
 
         // // wait for next epoch
         await sleep(TEST_EPOCH_SECONDS * 1_000 + 500);
@@ -500,42 +393,24 @@ describe("Claim fee Gauge", () => {
                 gaugeFactory,
             })
             .rpc();
-        gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-        expect(gaugeFactoryState.currentRewardsEpoch).equal(3);
-
-        // claim some fee in epoch 3
-        await claimAFeeInVotingEpoch(gauge, voterKP, 3, programGauge, programVoter, programMocAmm);
-
-        var tokenAFeeBalance = await provider.connection
-            .getTokenAccountBalance(tokenAFee);
-        expect(Number(tokenAFeeBalance.value.amount)).to.deep.equal(0);
-
-        const destTokenAccount = await getOrCreateATA(
-            tokenAMint,
-            voterKP.publicKey,
-            voterKP,
-            provider.connection
-        );
-
-        var destTokenAccountBalance = await provider.connection
-            .getTokenAccountBalance(destTokenAccount);
-        expect(Number(destTokenAccountBalance.value.amount)).to.deep.equal(swapAAmount * AMM_FEE / 10000);
+        var gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
+        expect(gaugeFactoryState.currentRewardsEpoch).equal(2);
 
 
-        let epochGaugeVoter = await getEpochGaugeVoterForVotingEpoch(gauge, voterKP.publicKey, 3, programGauge, programVoter);
-        let epochGaugeVoterState = await programGauge.account.epochGaugeVoter.fetch(epochGaugeVoter);
-        expect(epochGaugeVoterState.isFeeAClaimed).equal(true);
+        // can claim bribe
+        // claim at distribute rewards epoch 3 (coresponding to voting epoch 2)
+        await claimBribe(bribeResult.bribe, voterKP, 3, programGauge, programVoter);
+        let tokenAccount = await getOrCreateATA(bribeResult.tokenMint, voterKP.publicKey, voterKP, provider.connection);
+        var tokenAccountBalance = await provider.connection
+            .getTokenAccountBalance(tokenAccount);
+        expect(Number(tokenAccountBalance.value.amount)).to.deep.equal(rewardEachEpoch);
 
-        await assertEpochFee(gauge);
-    })
+    });
 
-    it("2 voters share fee in epoch", async () => {
-        // simulate swap to get some fee
-        let swapAAmount = 1000000;
-        await simulateSwapAtoB(ammPool, swapAAmount, adminKP);
-        var tokenAFeeBalance = await provider.connection
-            .getTokenAccountBalance(tokenAFee);
-        expect(Number(tokenAFeeBalance.value.amount)).to.deep.equal(swapAAmount * AMM_FEE / 10000);
+    it("2 voters share bribe in epoch", async () => {
+        var gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
+        expect(gaugeFactoryState.currentRewardsEpoch).equal(0);
+
         // init voter 2
         const voterKP2 = Keypair.generate();
         let destination = await getOrCreateATA(
@@ -564,11 +439,19 @@ describe("Claim fee Gauge", () => {
                 gaugeFactory,
             })
             .rpc();
-        let gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
+        var gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
         expect(gaugeFactoryState.currentRewardsEpoch).equal(1);
 
 
-        let epochGauge = await getOrCreateEpochGaugeForCurrentEpoch(gauge, programGauge);
+        // create bribe
+        // create bribe from epoch 3 to 5
+        let bribeEpochEnd = 5;
+        let rewardEachEpoch = 10_000;
+
+        let bribeResult = await createBribe(gauge, adminKP, bribeEpochEnd, rewardEachEpoch, programGauge);
+
+
+        await getOrCreateEpochGaugeForCurrentEpoch(gauge, programGauge);
 
         // voter 1 set vote
         await setVote(gauge, 50, voterKP, programGauge, programVoter);
@@ -596,71 +479,107 @@ describe("Claim fee Gauge", () => {
         gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
         expect(gaugeFactoryState.currentRewardsEpoch).equal(2);
 
-        // voter 1 claim some fee in epoch 2
-        await claimAFeeInVotingEpoch(gauge, voterKP, 2, programGauge, programVoter, programMocAmm);
-        // voter 2 claim some fee in epoch 2
-        await claimAFeeInVotingEpoch(gauge, voterKP2, 2, programGauge, programVoter, programMocAmm);
+        // voter 1 can claim bribe in voting epoch 2
+        await claimBribe(bribeResult.bribe, voterKP, 3, programGauge, programVoter);
+        // voter 2 can claim bribe in voting epoch 2
+        await claimBribe(bribeResult.bribe, voterKP2, 3, programGauge, programVoter);
+
+        let tokenAccount1 = await getOrCreateATA(bribeResult.tokenMint, voterKP.publicKey, voterKP, provider.connection);
+        var tokenAccountBalance1 = await provider.connection
+            .getTokenAccountBalance(tokenAccount1);
+
+        let tokenAccount2 = await getOrCreateATA(bribeResult.tokenMint, voterKP2.publicKey, voterKP, provider.connection);
+        var tokenAccountBalance2 = await provider.connection
+            .getTokenAccountBalance(tokenAccount2);
 
 
-        var tokenAFeeBalance = await provider.connection
-            .getTokenAccountBalance(tokenAFee);
-        expect(Number(tokenAFeeBalance.value.amount)).lessThan(2); // precision
+        expect(Number(tokenAccountBalance1.value.amount)).greaterThan(0);
+        expect(Number(tokenAccountBalance2.value.amount)).greaterThan(0);
 
-        const destTokenAccount1 = await getOrCreateATA(
-            tokenAMint,
-            voterKP.publicKey,
-            voterKP,
-            provider.connection
-        );
-        var destTokenAccountBalance1 = await provider.connection
-            .getTokenAccountBalance(destTokenAccount1);
+        console.log(Number(tokenAccountBalance1.value.amount), Number(tokenAccountBalance2.value.amount));
 
-        const destTokenAccount2 = await getOrCreateATA(
-            tokenAMint,
-            voterKP2.publicKey,
-            voterKP2,
-            provider.connection
-        );
-        var destTokenAccountBalance2 = await provider.connection
-            .getTokenAccountBalance(destTokenAccount2);
 
-        console.log("claimed fees of voter 1: ", destTokenAccountBalance1.value.amount)
-        console.log("claimed fees of voter 2: ", destTokenAccountBalance2.value.amount)
-
-        let epochGaugeState = await programGauge.account.epochGauge.fetch(epochGauge);
-        expect(+(Number(destTokenAccountBalance1.value.amount) + Number(destTokenAccountBalance2.value.amount) - epochGaugeState.tokenAFee.toNumber())).lessThan(2); // precision
-
-        await assertEpochFee(gauge);
+        expect(rewardEachEpoch - (Number(tokenAccountBalance1.value.amount) + Number(tokenAccountBalance2.value.amount))).lessThan(2); // precision
     })
+
+
+    it("clawback bribe", async () => {
+        var gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
+        expect(gaugeFactoryState.currentRewardsEpoch).equal(0);
+        // create bribe
+        // create bribe from epoch 1 to 3
+        let bribeEpochEnd = 4;
+        let rewardEachEpoch = 10_000;
+
+        let bribeResult = await createBribe(gauge, adminKP, bribeEpochEnd, rewardEachEpoch, programGauge);
+
+        // trigger epoch to vote and earn bribe
+        await programGauge.methods
+            .triggerNextEpoch()
+            .accounts({
+                gaugeFactory,
+            })
+            .rpc();
+        // // wait for next epoch
+        await sleep(TEST_EPOCH_SECONDS * 1_000 + 500);
+        // trigger next epoch
+        await programGauge.methods
+            .triggerNextEpoch()
+            .accounts({
+                gaugeFactory,
+            })
+            .rpc();
+        var gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
+        expect(gaugeFactoryState.currentRewardsEpoch).equal(2);
+
+        // clawback rewards when epoch gauge is not existed, voting epoch 1
+        await clawbackBribe(bribeResult.bribe, adminKP, 2, programGauge);
+
+        let tokenAccount = await getOrCreateATA(bribeResult.tokenMint, adminKP.publicKey, adminKP, provider.connection);
+        var tokenAccountBalance = await provider.connection
+            .getTokenAccountBalance(tokenAccount);
+
+        expect(Number(tokenAccountBalance.value.amount)).equal(rewardEachEpoch);
+
+
+        await getOrCreateEpochGaugeForCurrentEpoch(gauge, programGauge);
+        // // wait for next epoch
+        await sleep(TEST_EPOCH_SECONDS * 1_000 + 500);
+        // trigger next epoch
+        await programGauge.methods
+            .triggerNextEpoch()
+            .accounts({
+                gaugeFactory,
+            })
+            .rpc();
+        await getOrCreateEpochGaugeForCurrentEpoch(gauge, programGauge);
+
+
+        // clawback rewards when epoch gauge is not existed, voting epoch 2
+        await clawbackBribe(bribeResult.bribe, adminKP, 3, programGauge);
+        var tokenAccountBalance = await provider.connection
+            .getTokenAccountBalance(tokenAccount);
+
+        expect(Number(tokenAccountBalance.value.amount)).equal(rewardEachEpoch * 2);
+
+        // // wait for next epoch
+        await sleep(TEST_EPOCH_SECONDS * 1_000 + 500);
+        // trigger next epoch
+        await programGauge.methods
+            .triggerNextEpoch()
+            .accounts({
+                gaugeFactory,
+            })
+            .rpc();
+
+        // clawback rewards when epoch gauge is not existed, voting epoch 3
+        await clawbackBribe(bribeResult.bribe, adminKP, 4, programGauge);
+        var tokenAccountBalance = await provider.connection
+            .getTokenAccountBalance(tokenAccount);
+
+        expect(Number(tokenAccountBalance.value.amount)).equal(rewardEachEpoch * 3);
+
+    });
 });
 
 
-async function assertEpochFee(gauge: PublicKey) {
-    // assert fee in gauge
-    let gaugeState = await programGauge.account.gauge.fetch(gauge);
-    let feeABalance = await provider.connection
-        .getTokenAccountBalance((gaugeState).tokenAFeeKey);
-    expect(gaugeState.cummulativeTokenAFee.toNumber()).equal(Number(feeABalance.value.amount) + gaugeState.cummulativeClaimedTokenAFee.toNumber());
-    let feeBBalance = await provider.connection
-        .getTokenAccountBalance((gaugeState).tokenBFeeKey);
-    expect(gaugeState.cummulativeTokenBFee.toNumber()).equal(Number(feeBBalance.value.amount) + gaugeState.cummulativeClaimedTokenBFee.toNumber());
-
-    // assert fee in epoch
-    let gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeState.gaugeFactory);
-    let votingEpoch = gaugeFactoryState.currentRewardsEpoch + 1;
-
-    let totalEpochAFee = 0;
-    let totalEpochBFee = 0;
-    for (let i = 1; i <= votingEpoch; i++) {
-        let epochGauge = await getEpochGaugeByVotingEpoch(gauge, i, programGauge);
-        const epochGaugeState = await programGauge.account.epochGauge.fetchNullable(epochGauge);
-        if (epochGaugeState) {
-            totalEpochAFee += epochGaugeState.tokenAFee.toNumber();
-            totalEpochBFee += epochGaugeState.tokenBFee.toNumber();
-        }
-    }
-
-    expect(gaugeState.cummulativeTokenAFee.toNumber()).equal(totalEpochAFee);
-    expect(gaugeState.cummulativeTokenBFee.toNumber()).equal(totalEpochBFee);
-
-}

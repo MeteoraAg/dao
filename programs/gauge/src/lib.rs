@@ -130,7 +130,7 @@ pub mod gauge {
     /// Only the [voter::Escrow::vote_delegate] may call this.
     #[access_control(ctx.accounts.validate())]
     pub fn claim_fee(ctx: Context<ClaimFee>, voting_epoch: u32) -> Result<()> {
-        instructions::claim_fee::handler(ctx, voting_epoch)
+        claim_fee::handler(ctx, voting_epoch)
     }
 
     /// Closes an [EpochGaugeVote], sending lamports to a user-specified address.
@@ -141,7 +141,36 @@ pub mod gauge {
         ctx: Context<CloseEpochGaugeVote>,
         voting_epoch: u32,
     ) -> Result<()> {
-        instructions::close_epoch_gauge_vote::handler(ctx, voting_epoch)
+        close_epoch_gauge_vote::handler(ctx, voting_epoch)
+    }
+
+    /// Create an [Bribe]
+    ///
+    /// Permissionless, anyone can crate bribe
+    #[access_control(ctx.accounts.validate())]
+    pub fn create_bribe(
+        ctx: Context<CreateBribe>,
+        reward_each_epoch: u64,
+        bribe_epoch_end: u32,
+    ) -> Result<()> {
+        create_bribe::handler(ctx, reward_each_epoch, bribe_epoch_end)
+    }
+    /// Claim an [Bribe] for voting epoch
+    ///
+    /// Permissionless, anyone can crate bribe
+    #[access_control(ctx.accounts.validate())]
+    pub fn claim_bribe(ctx: Context<ClaimBribe>, distribute_rewards_epoch: u32) -> Result<()> {
+        claim_bribe::handler(ctx, distribute_rewards_epoch)
+    }
+    /// Rescue an [Bribe] for voting epoch
+    ///
+    /// Briber claim rewards back in case onbody vote for a gauge in this epoch
+    #[access_control(ctx.accounts.validate())]
+    pub fn clawback_bribe(
+        ctx: Context<ClawbackBribe>,
+        distribute_rewards_epoch: u32,
+    ) -> Result<()> {
+        clawback_bribe::handler(ctx, distribute_rewards_epoch)
     }
 }
 
@@ -186,4 +215,14 @@ pub enum ErrorCode {
     TokenAccountIsNotCorrect,
     #[msg("VotingEpoch is not correct.")]
     VotingEpochIsNotCorrect,
+    #[msg("ClawbackEpoch is not correct.")]
+    ClawbackEpochIsNotCorrect,
+    #[msg("EpochGauge is voted.")]
+    EpochGaugeIsVoted,
+    #[msg("Bribe Epoch End must be greater than voting epoch.")]
+    BribeEpochEndError,
+    #[msg("Bribe rewards are zero.")]
+    BribeRewardsIsZero,
+    #[msg("Math overflow.")]
+    MathOverflow,
 }

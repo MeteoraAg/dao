@@ -104,7 +104,7 @@ pub struct Miner {
     /// A checkpoint of the [Quarry]'s reward tokens paid per staked token.
     ///
     /// When the [Miner] is initialized, this number starts at 0.
-    /// On the first [quarry_mine::stake_tokens], the [Quarry]#update_rewards_and_miner
+    /// On the first [quarry::stake_tokens], the [Quarry]#update_rewards_and_miner
     /// method is called, which updates this checkpoint to the current quarry value.
     ///
     /// On a [quarry::claim_rewards], the difference in checkpoints is used to calculate

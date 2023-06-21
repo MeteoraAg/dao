@@ -1,5 +1,8 @@
+pub mod claim_bribe;
 pub mod claim_fee;
+pub mod clawback_bribe;
 pub mod close_epoch_gauge_vote;
+pub mod create_bribe;
 pub mod create_epoch_gauge;
 pub mod create_gauge;
 pub mod create_gauge_factory;
@@ -16,8 +19,11 @@ pub mod sync_disabled_gauge;
 pub mod sync_gauge;
 pub mod trigger_next_epoch;
 
+pub use claim_bribe::*;
 pub use claim_fee::*;
+pub use clawback_bribe::*;
 pub use close_epoch_gauge_vote::*;
+pub use create_bribe::*;
 pub use create_epoch_gauge::*;
 pub use create_gauge::*;
 pub use create_gauge_factory::*;

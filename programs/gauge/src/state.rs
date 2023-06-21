@@ -39,6 +39,12 @@ impl GaugeFactory {
         let voting_epoch = unwrap_int!(self.current_rewards_epoch.checked_add(1));
         Ok(voting_epoch)
     }
+
+    /// Fetches the current distrbute rewards epoch (for claim fee and bribe). This is always the epoch after [Self::voting_epoch()].
+    pub fn distribute_rewards_epoch(&self) -> Result<u32> {
+        let distribute_rewards_epoch = unwrap_int!(self.voting_epoch()?.checked_add(1));
+        Ok(distribute_rewards_epoch)
+    }
 }
 
 /// A [Gauge] determines the rewards shares to give to a [quarry::Quarry].
@@ -213,4 +219,51 @@ impl EpochGaugeVote {
             &crate::ID,
         )
     }
+}
+
+/// Bribe with a gauge
+#[account]
+#[derive(Copy, Debug, Default)]
+pub struct Bribe {
+    /// The gauge bribe for
+    pub gauge: Pubkey,
+    /// token mint of the bribe
+    pub token_mint: Pubkey,
+    /// reward for each epoch of bribe
+    pub reward_each_epoch: u64,
+    /// user who give the bribe
+    pub briber: Pubkey,
+    /// token account store bribe
+    pub token_account_vault: Pubkey,
+    /// When bribe epoch end
+    pub bribe_rewards_epoch_start: u32,
+    /// When bribe epoch end
+    pub bribe_rewards_epoch_end: u32,
+    /// Claimed amount, just for display
+    pub claimed_amount: u64,
+}
+
+impl Bribe {
+    /// Find rewards for an user in an epoch
+    pub fn get_rewards_for_an_epoch(&self, allocated_power: u64, total_power: u64) -> Option<u64> {
+        let reward_each_epoch = u128::from(self.reward_each_epoch);
+        let allocated_power = u128::from(allocated_power);
+        let total_power = u128::from(total_power);
+        let rewards = reward_each_epoch
+            .checked_mul(allocated_power)?
+            .checked_div(total_power)?;
+        u64::try_from(rewards).ok()
+    }
+}
+
+/// An [EpochBribeVoter]
+#[account]
+#[derive(Copy, Debug, Default)]
+pub struct EpochBribeVoter {
+    /// The [Bribe].
+    pub bribe: Pubkey,
+    /// The rewards epoch that the [GuageVoter] claim rewards for.
+    pub distribute_rewards_epoch: u32,
+    /// gauge voter
+    pub gauge_voter: Pubkey,
 }
