@@ -248,7 +248,7 @@ export async function getOrCreateEpochGaugeVoterForCurrentEpoch(
         await programGauge.account.gauge.fetch(gauge);
     let gaugeFactoryState =
         await programGauge.account.gaugeFactory.fetch(gaugeState.gaugeFactory);
-    const votingEpoch = gaugeFactoryState.currentRewardsEpoch + 1;
+    const votingEpoch = gaugeFactoryState.currentVotingEpoch;
 
     return await getOrCreateEpochGaugeVoterByVotingEpoch(gauge, owner, votingEpoch, programGauge, programVoter);
 
@@ -298,7 +298,7 @@ export async function getOrCreateEpochGaugeVoteByCurrentEpoch(
         await programGauge.account.gauge.fetch(gauge);
     let gaugeFactoryState =
         await programGauge.account.gaugeFactory.fetch(gaugeState.gaugeFactory);
-    const votingEpoch = gaugeFactoryState.currentRewardsEpoch + 1;
+    const votingEpoch = gaugeFactoryState.currentVotingEpoch;
     return getOrCreateEpochGaugeVoteByVotingEpoch(gauge, owner, votingEpoch, programGauge, programVoter)
 }
 
@@ -403,7 +403,7 @@ export async function getOrCreateEpochGaugeForCurrentEpoch(
 
     const [epochGauge, gaugeVoteBump] =
         anchor.web3.PublicKey.findProgramAddressSync(
-            [Buffer.from("EpochGauge"), gauge.toBuffer(), encodeU32(gaugeFactoryState.currentRewardsEpoch + 1)],
+            [Buffer.from("EpochGauge"), gauge.toBuffer(), encodeU32(gaugeFactoryState.currentVotingEpoch)],
             programGauge.programId
         );
     const epochGaugeState = await programGauge.account.epochGauge.fetchNullable(epochGauge);
@@ -460,7 +460,7 @@ export async function syncGauge(
         return;
     }
 
-    let epochGauge = await getEpochGaugeByVotingEpoch(gauge, gaugeFactoryState.currentRewardsEpoch, programGauge);
+    let epochGauge = await getEpochGaugeByVotingEpoch(gauge, gaugeFactoryState.currentVotingEpoch - 1, programGauge);
 
     await programGauge.methods
         .syncGauge()
@@ -753,10 +753,9 @@ export async function createBribe(
         tokenMint,
         tokenAccount,
         briberKP.publicKey,
-        rewardEachEpoch * (bribeRewardsEpochEnd + 1 - (gaugeFactoryState.currentRewardsEpoch + 2))
+        rewardEachEpoch * (bribeRewardsEpochEnd + 1 - (gaugeFactoryState.currentVotingEpoch))
     );
 
-    console.log(rewardEachEpoch * (bribeRewardsEpochEnd - gaugeFactoryState.currentRewardsEpoch))
 
     await programGauge.methods.createBribe(new BN(rewardEachEpoch), bribeRewardsEpochEnd).accounts({
         gaugeFactory: gaugeState.gaugeFactory,
@@ -781,11 +780,10 @@ export async function createBribe(
 export async function claimBribe(
     bribe: PublicKey,
     voterKP: Keypair,
-    distributeRewardsEpoch: number,
+    votingEpoch: number,
     programGauge: Program<Gauge>,
     programVoter: Program<Voter>,
 ) {
-    let votingEpoch = distributeRewardsEpoch - 1;
     let bribeState = await programGauge.account.bribe.fetch(bribe);
     let gauge = bribeState.gauge;
     let gaugeState = await programGauge.account.gauge.fetch(gauge);
@@ -808,11 +806,11 @@ export async function claimBribe(
     );
 
     let [epochBribeVoter, bBump] = web3.PublicKey.findProgramAddressSync(
-        [Buffer.from("EpochBribeVoter"), encodeU32(distributeRewardsEpoch), bribe.toBytes(), gaugeVoter.toBytes()],
+        [Buffer.from("EpochBribeVoter"), encodeU32(votingEpoch), bribe.toBytes(), gaugeVoter.toBytes()],
         programGauge.programId
     );
 
-    await programGauge.methods.claimBribe(distributeRewardsEpoch).accounts({
+    await programGauge.methods.claimBribe(votingEpoch).accounts({
         bribe,
         epochBribeVoter,
         epochGauge,
@@ -835,10 +833,9 @@ export async function claimBribe(
 export async function clawbackBribe(
     bribe: PublicKey,
     briberKP: Keypair,
-    distributeRewardsEpoch: number,
+    votingEpoch: number,
     programGauge: Program<Gauge>,
 ) {
-    let votingEpoch = distributeRewardsEpoch - 1;
     let bribeState = await programGauge.account.bribe.fetch(bribe);
     let gauge = bribeState.gauge;
     let gaugeState = await programGauge.account.gauge.fetch(gauge);
@@ -851,7 +848,7 @@ export async function clawbackBribe(
     let tokenAccount = await getOrCreateATA(bribeState.tokenMint, briberKP.publicKey, briberKP, provider.connection);
     let epochGauge = await getEpochGaugeByVotingEpoch(gauge, votingEpoch, programGauge);
 
-    await programGauge.methods.clawbackBribe(distributeRewardsEpoch).accounts({
+    await programGauge.methods.clawbackBribe(votingEpoch).accounts({
         bribe,
         epochGauge,
         gaugeFactory: gaugeState.gaugeFactory,

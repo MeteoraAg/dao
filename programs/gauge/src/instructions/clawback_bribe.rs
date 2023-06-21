@@ -3,7 +3,7 @@ use crate::*;
 
 /// Accounts for [gauge::claim_bribe].
 #[derive(Accounts)]
-#[instruction(distribute_rewards_epoch: u32)]
+#[instruction(voting_epoch: u32)]
 pub struct ClawbackBribe<'info> {
     /// The [Bribe]
     #[account(has_one = gauge, has_one = token_account_vault, has_one = briber)]
@@ -14,7 +14,7 @@ pub struct ClawbackBribe<'info> {
         seeds = [
             b"EpochGauge".as_ref(),
             gauge.key().as_ref(),
-            unwrap_int!(distribute_rewards_epoch.checked_sub(1)).to_le_bytes().as_ref()
+            voting_epoch.to_le_bytes().as_ref()
         ],
         bump,
     )]
@@ -39,19 +39,19 @@ pub struct ClawbackBribe<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-pub fn handler(ctx: Context<ClawbackBribe>, distribute_rewards_epoch: u32) -> Result<()> {
+pub fn handler(ctx: Context<ClawbackBribe>, voting_epoch: u32) -> Result<()> {
     let bribe = &ctx.accounts.bribe;
-    // cannot clawback for new distribute rewards epoch
+    // cannot clawback voting_epoch that is not finished
     invariant!(
-        distribute_rewards_epoch <= ctx.accounts.gauge_factory.distribute_rewards_epoch()?,
+        voting_epoch < ctx.accounts.gauge_factory.current_voting_epoch,
         ClawbackEpochIsNotCorrect
     );
     invariant!(
-        distribute_rewards_epoch >= bribe.bribe_rewards_epoch_start,
+        voting_epoch >= bribe.bribe_rewards_epoch_start,
         ClawbackEpochIsNotCorrect
     );
     invariant!(
-        distribute_rewards_epoch <= bribe.bribe_rewards_epoch_end,
+        voting_epoch <= bribe.bribe_rewards_epoch_end,
         ClawbackEpochIsNotCorrect
     );
 

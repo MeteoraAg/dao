@@ -26,7 +26,7 @@ pub fn handler(ctx: Context<TriggerNextEpoch>) -> Result<()> {
     );
 
     let gauge_factory = &mut ctx.accounts.gauge_factory;
-    gauge_factory.current_rewards_epoch = gauge_factory.voting_epoch()?;
+    gauge_factory.current_voting_epoch = gauge_factory.distribute_rewards_epoch()?;
     gauge_factory.next_epoch_starts_at =
         unwrap_int!(now.checked_add(unwrap_int!(gauge_factory.epoch_duration_seconds.to_u64())));
     Ok(())

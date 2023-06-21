@@ -59,7 +59,7 @@ pub fn handler(ctx: Context<GaugeRevertVote>) -> Result<()> {
 impl<'info> Validate<'info> for GaugeRevertVote<'info> {
     fn validate(&self) -> Result<()> {
         // assert_keys_eq!(self.gauge_factory, self.gauge.gauge_factory);
-        let voting_epoch = self.gauge_factory.voting_epoch()?;
+        let voting_epoch = self.gauge_factory.current_voting_epoch;
         invariant!(
             self.epoch_gauge.voting_epoch == voting_epoch,
             EpochGaugeNotVoting

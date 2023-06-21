@@ -27,22 +27,22 @@ pub struct GaugeFactory {
     /// The epoch duration is not exact, as epochs must manually be incremented.
     pub epoch_duration_seconds: u32,
 
-    /// The current rewards epoch.
-    pub current_rewards_epoch: u32,
+    /// The current voting epoch, start from 1
+    pub current_voting_epoch: u32,
     /// When the next epoch starts.
     pub next_epoch_starts_at: u64,
 }
 
 impl GaugeFactory {
-    /// Fetches the current voting epoch. This is always the epoch after [Self::current_rewards_epoch].
-    pub fn voting_epoch(&self) -> Result<u32> {
-        let voting_epoch = unwrap_int!(self.current_rewards_epoch.checked_add(1));
+    /// Fetches the current rewards epoch (for set rewards share in quarry). This is always the epoch before [Self::current_voting_epoch].
+    pub fn rewards_epoch(&self) -> Result<u32> {
+        let voting_epoch = unwrap_int!(self.current_voting_epoch.checked_sub(1));
         Ok(voting_epoch)
     }
 
-    /// Fetches the current distrbute rewards epoch (for claim fee and bribe). This is always the epoch after [Self::voting_epoch()].
+    /// Fetches the current distribute rewards epoch (for claim fee and bribe). This is always the epoch after [Self::current_voting_epoch].
     pub fn distribute_rewards_epoch(&self) -> Result<u32> {
-        let distribute_rewards_epoch = unwrap_int!(self.voting_epoch()?.checked_add(1));
+        let distribute_rewards_epoch = unwrap_int!(self.current_voting_epoch.checked_add(1));
         Ok(distribute_rewards_epoch)
     }
 }
@@ -263,7 +263,7 @@ pub struct EpochBribeVoter {
     /// The [Bribe].
     pub bribe: Pubkey,
     /// The rewards epoch that the [GuageVoter] claim rewards for.
-    pub distribute_rewards_epoch: u32,
+    pub voting_epoch: u32,
     /// gauge voter
     pub gauge_voter: Pubkey,
 }

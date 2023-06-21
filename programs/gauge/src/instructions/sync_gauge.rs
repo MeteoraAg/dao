@@ -75,11 +75,11 @@ impl<'info> Validate<'info> for SyncGauge<'info> {
         assert_keys_eq!(self.quarry.rewarder, self.rewarder);
 
         invariant!(
-            self.gauge_factory.current_rewards_epoch != 0,
+            self.gauge_factory.rewards_epoch()? != 0,
             GaugeEpochCannotBeZero
         );
         invariant!(
-            self.epoch_gauge.voting_epoch == self.gauge_factory.current_rewards_epoch,
+            self.epoch_gauge.voting_epoch == self.gauge_factory.rewards_epoch()?,
             GaugeWrongEpoch
         );
 

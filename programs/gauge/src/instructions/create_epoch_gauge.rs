@@ -17,7 +17,7 @@ pub struct CreateEpochGauge<'info> {
         seeds = [
             b"EpochGauge".as_ref(),
             gauge.key().as_ref(),
-            gauge_factory.voting_epoch()?.to_le_bytes().as_ref()
+            gauge_factory.current_voting_epoch.to_le_bytes().as_ref()
         ],
         bump,
         space = 8 + std::mem::size_of::<EpochGauge>(),
@@ -42,7 +42,7 @@ pub struct CreateEpochGauge<'info> {
 pub fn handler(ctx: Context<CreateEpochGauge>) -> Result<()> {
     let epoch_gauge = &mut ctx.accounts.epoch_gauge;
     epoch_gauge.gauge = ctx.accounts.gauge.key();
-    let voting_epoch = ctx.accounts.gauge_factory.voting_epoch()?;
+    let voting_epoch = ctx.accounts.gauge_factory.current_voting_epoch;
     epoch_gauge.voting_epoch = voting_epoch;
     epoch_gauge.total_power = 0;
 

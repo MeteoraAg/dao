@@ -61,7 +61,7 @@ impl<'info> Validate<'info> for SyncDisabledGauge<'info> {
         assert_keys_eq!(self.quarry.rewarder, self.rewarder);
 
         invariant!(
-            self.gauge_factory.current_rewards_epoch != 0,
+            self.gauge_factory.rewards_epoch()? != 0,
             GaugeEpochCannotBeZero
         );
 

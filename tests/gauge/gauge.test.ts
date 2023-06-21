@@ -367,7 +367,7 @@ describe("Gauge", () => {
 
             let gaugeFactoryState =
                 await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-            expect(gaugeFactoryState.currentRewardsEpoch).to.deep.equal(1);
+            expect(gaugeFactoryState.currentVotingEpoch).to.deep.equal(2);
             try {
                 await programGauge.methods
                     .triggerNextEpoch()
@@ -415,7 +415,7 @@ describe("Gauge", () => {
             await getOrCreateEpochGaugeForCurrentEpoch(gauge2, programGauge);
 
             let gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-            expect(gaugeFactoryState.currentRewardsEpoch).equal(1);
+            expect(gaugeFactoryState.currentVotingEpoch).equal(2);
 
             await programGauge.methods
                 .gaugeEnable()
@@ -467,7 +467,7 @@ describe("Gauge", () => {
                 })
                 .rpc();
             gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-            expect(gaugeFactoryState.currentRewardsEpoch).equal(2);
+            expect(gaugeFactoryState.currentVotingEpoch).equal(3);
 
             await syncGauge(gauge, programGauge, programQuarry);
             await syncGauge(gauge2, programGauge, programQuarry);
@@ -506,7 +506,7 @@ describe("Gauge", () => {
             await getOrCreateEpochGaugeForCurrentEpoch(gauge, programGauge);
 
             let gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-            expect(gaugeFactoryState.currentRewardsEpoch).equal(1);
+            expect(gaugeFactoryState.currentVotingEpoch).equal(2);
 
             try {
                 let epochGaugeVote = await getOrCreateEpochGaugeVoteByVotingEpoch(gauge, voterKP.publicKey, 2, programGauge, programVoter);
@@ -653,7 +653,7 @@ describe("Gauge", () => {
             );
 
             let gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-            expect(gaugeFactoryState.currentRewardsEpoch).equal(1);
+            expect(gaugeFactoryState.currentVotingEpoch).equal(2);
 
             let epochGaugeState = await programGauge.account.epochGauge.fetch(epochGauge);
             expect(epochGaugeState.votingEpoch).equal(2);

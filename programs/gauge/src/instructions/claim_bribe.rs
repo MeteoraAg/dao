@@ -4,7 +4,7 @@ use crate::*;
 
 /// Accounts for [gauge::claim_bribe].
 #[derive(Accounts)]
-#[instruction(distribute_rewards_epoch: u32)]
+#[instruction(voting_epoch: u32)]
 pub struct ClaimBribe<'info> {
     /// The [Bribe]
     #[account(mut, has_one = gauge, has_one = token_account_vault)]
@@ -13,17 +13,17 @@ pub struct ClaimBribe<'info> {
     // ensure that gauge voter cannot claim again for an epoch with a bribe
     #[account(
         init,
-        seeds = [b"EpochBribeVoter".as_ref(), distribute_rewards_epoch.to_le_bytes().as_ref(), bribe.key().as_ref(), gauge_voter.key().as_ref()],
+        seeds = [b"EpochBribeVoter".as_ref(), voting_epoch.to_le_bytes().as_ref(), bribe.key().as_ref(), gauge_voter.key().as_ref()],
         bump,
         space = 8 + std::mem::size_of::<EpochBribeVoter>(),
         payer = vote_delegate,
     )]
     pub epoch_bribe_voter: Account<'info, EpochBribeVoter>,
 
-    #[account(has_one = gauge_voter, constraint = epoch_gauge_voter.voting_epoch == unwrap_int!(distribute_rewards_epoch.checked_sub(1)))]
+    #[account(has_one = gauge_voter, constraint = epoch_gauge_voter.voting_epoch == voting_epoch)]
     pub epoch_gauge_voter: Box<Account<'info, EpochGaugeVoter>>,
 
-    #[account(constraint = epoch_gauge_voter.voting_epoch == unwrap_int!(distribute_rewards_epoch.checked_sub(1)), has_one = gauge)]
+    #[account(constraint = epoch_gauge_voter.voting_epoch == voting_epoch, has_one = gauge)]
     pub epoch_gauge: Box<Account<'info, EpochGauge>>,
 
     /// The [GaugeFactory].
@@ -58,20 +58,19 @@ pub struct ClaimBribe<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(ctx: Context<ClaimBribe>, distribute_rewards_epoch: u32) -> Result<()> {
+pub fn handler(ctx: Context<ClaimBribe>, voting_epoch: u32) -> Result<()> {
     let bribe = &mut ctx.accounts.bribe;
     let epoch_bribe_voter = &mut ctx.accounts.epoch_bribe_voter;
-    let current_distribute_rewards_epoch = ctx.accounts.gauge_factory.distribute_rewards_epoch()?;
     invariant!(
-        distribute_rewards_epoch < current_distribute_rewards_epoch, // epoch is still voting
+        voting_epoch < ctx.accounts.gauge_factory.current_voting_epoch, // epoch is still voting
         CloseEpochNotElapsed
     );
     invariant!(
-        distribute_rewards_epoch >= bribe.bribe_rewards_epoch_start,
+        voting_epoch >= bribe.bribe_rewards_epoch_start,
         BribeEpochEndError
     );
     invariant!(
-        distribute_rewards_epoch <= bribe.bribe_rewards_epoch_end,
+        voting_epoch <= bribe.bribe_rewards_epoch_end,
         BribeEpochEndError
     );
 
@@ -104,12 +103,12 @@ pub fn handler(ctx: Context<ClaimBribe>, distribute_rewards_epoch: u32) -> Resul
 
     epoch_bribe_voter.bribe = ctx.accounts.bribe.key();
     epoch_bribe_voter.gauge_voter = ctx.accounts.gauge_voter.key();
-    epoch_bribe_voter.distribute_rewards_epoch = distribute_rewards_epoch;
+    epoch_bribe_voter.voting_epoch = voting_epoch;
 
     emit!(BribeClaimEvent {
         gauge: ctx.accounts.gauge.key(),
         bribe: ctx.accounts.bribe.key(),
-        distribute_rewards_epoch,
+        voting_epoch,
         rewards,
         token_account: ctx.accounts.token_account.key(),
         escrow: ctx.accounts.escrow.key(),
@@ -134,7 +133,7 @@ pub struct BribeClaimEvent {
     /// The Bribe.
     pub bribe: Pubkey,
     /// The distribute rewards epoch.
-    pub distribute_rewards_epoch: u32,
+    pub voting_epoch: u32,
     /// The Bribe epoch start.
     pub rewards: u64,
     /// The Bribe epoch end.

@@ -111,7 +111,7 @@ impl<'info> Validate<'info> for GaugeCommitVote<'info> {
             WeightSeqnoChanged
         );
 
-        let voting_epoch = self.gauge_factory.voting_epoch()?;
+        let voting_epoch = self.gauge_factory.current_voting_epoch;
         invariant!(
             self.epoch_gauge_voter.voting_epoch == voting_epoch,
             EpochGaugeNotVoting

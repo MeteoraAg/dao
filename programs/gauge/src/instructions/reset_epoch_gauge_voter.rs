@@ -65,7 +65,7 @@ impl<'info> Validate<'info> for ResetEpochGaugeVoter<'info> {
         assert_keys_eq!(self.escrow.locker, self.locker);
         assert_keys_eq!(self.escrow.owner, self.gauge_voter.owner);
 
-        let voting_epoch = self.gauge_factory.voting_epoch()?;
+        let voting_epoch = self.gauge_factory.current_voting_epoch;
         invariant!(
             self.epoch_gauge_voter.voting_epoch == voting_epoch,
             EpochClosed

@@ -334,7 +334,7 @@ describe("Bribe Gauge", () => {
 
     it("A voter claim bribe", async () => {
         var gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-        expect(gaugeFactoryState.currentRewardsEpoch).equal(0);
+        expect(gaugeFactoryState.currentVotingEpoch).equal(1);
 
         // trigger epoch to vote and earn bribe
         await programGauge.methods
@@ -344,7 +344,7 @@ describe("Bribe Gauge", () => {
             })
             .rpc();
         var gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-        expect(gaugeFactoryState.currentRewardsEpoch).equal(1);
+        expect(gaugeFactoryState.currentVotingEpoch).equal(2);
 
         await getOrCreateEpochGaugeForCurrentEpoch(gauge, programGauge);
         await setVote(gauge, 50, voterKP, programGauge, programVoter);
@@ -355,15 +355,14 @@ describe("Bribe Gauge", () => {
         await getOrCreateEpochGaugeVoteByCurrentEpoch(gauge, voterKP.publicKey, programGauge, programVoter);
 
         // create bribe
-        // create bribe from epoch 3 to 5
-        let bribeEpochEnd = 5;
+        let bribeEpochEnd = 4;
         let rewardEachEpoch = 10_000;
 
         let bribeResult = await createBribe(gauge, adminKP, bribeEpochEnd, rewardEachEpoch, programGauge);
 
         let bribeState = await programGauge.account.bribe.fetch(bribeResult.bribe);
 
-        expect(bribeState.bribeRewardsEpochStart).equal(3);
+        expect(bribeState.bribeRewardsEpochStart).equal(2);
         expect(bribeState.bribeRewardsEpochEnd).equal(bribeEpochEnd);
         expect(bribeState.rewardEachEpoch.toNumber()).equal(rewardEachEpoch);
 
@@ -378,7 +377,7 @@ describe("Bribe Gauge", () => {
 
         // cannot claim bribe yet
         try {
-            await claimBribe(bribeResult.bribe, voterKP, 3, programGauge, programVoter);
+            await claimBribe(bribeResult.bribe, voterKP, 2, programGauge, programVoter);
             expect(1).equal(0);
         } catch (e) {
             console.log("Cannot claim bribe yet");
@@ -394,12 +393,12 @@ describe("Bribe Gauge", () => {
             })
             .rpc();
         var gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-        expect(gaugeFactoryState.currentRewardsEpoch).equal(2);
+        expect(gaugeFactoryState.currentVotingEpoch).equal(3);
 
 
         // can claim bribe
-        // claim at distribute rewards epoch 3 (coresponding to voting epoch 2)
-        await claimBribe(bribeResult.bribe, voterKP, 3, programGauge, programVoter);
+        // claim at distribute rewards epoch 2
+        await claimBribe(bribeResult.bribe, voterKP, 2, programGauge, programVoter);
         let tokenAccount = await getOrCreateATA(bribeResult.tokenMint, voterKP.publicKey, voterKP, provider.connection);
         var tokenAccountBalance = await provider.connection
             .getTokenAccountBalance(tokenAccount);
@@ -409,7 +408,7 @@ describe("Bribe Gauge", () => {
 
     it("2 voters share bribe in epoch", async () => {
         var gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-        expect(gaugeFactoryState.currentRewardsEpoch).equal(0);
+        expect(gaugeFactoryState.currentVotingEpoch).equal(1);
 
         // init voter 2
         const voterKP2 = Keypair.generate();
@@ -440,12 +439,12 @@ describe("Bribe Gauge", () => {
             })
             .rpc();
         var gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-        expect(gaugeFactoryState.currentRewardsEpoch).equal(1);
+        expect(gaugeFactoryState.currentVotingEpoch).equal(2);
 
 
         // create bribe
-        // create bribe from epoch 3 to 5
-        let bribeEpochEnd = 5;
+        // create bribe from epoch 2 to 4
+        let bribeEpochEnd = 4;
         let rewardEachEpoch = 10_000;
 
         let bribeResult = await createBribe(gauge, adminKP, bribeEpochEnd, rewardEachEpoch, programGauge);
@@ -477,12 +476,12 @@ describe("Bribe Gauge", () => {
             })
             .rpc();
         gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-        expect(gaugeFactoryState.currentRewardsEpoch).equal(2);
+        expect(gaugeFactoryState.currentVotingEpoch).equal(3);
 
         // voter 1 can claim bribe in voting epoch 2
-        await claimBribe(bribeResult.bribe, voterKP, 3, programGauge, programVoter);
+        await claimBribe(bribeResult.bribe, voterKP, 2, programGauge, programVoter);
         // voter 2 can claim bribe in voting epoch 2
-        await claimBribe(bribeResult.bribe, voterKP2, 3, programGauge, programVoter);
+        await claimBribe(bribeResult.bribe, voterKP2, 2, programGauge, programVoter);
 
         let tokenAccount1 = await getOrCreateATA(bribeResult.tokenMint, voterKP.publicKey, voterKP, provider.connection);
         var tokenAccountBalance1 = await provider.connection
@@ -502,13 +501,12 @@ describe("Bribe Gauge", () => {
         expect(rewardEachEpoch - (Number(tokenAccountBalance1.value.amount) + Number(tokenAccountBalance2.value.amount))).lessThan(2); // precision
     })
 
-
     it("clawback bribe", async () => {
         var gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-        expect(gaugeFactoryState.currentRewardsEpoch).equal(0);
+        expect(gaugeFactoryState.currentVotingEpoch).equal(1);
         // create bribe
         // create bribe from epoch 1 to 3
-        let bribeEpochEnd = 4;
+        let bribeEpochEnd = 3;
         let rewardEachEpoch = 10_000;
 
         let bribeResult = await createBribe(gauge, adminKP, bribeEpochEnd, rewardEachEpoch, programGauge);
@@ -530,10 +528,10 @@ describe("Bribe Gauge", () => {
             })
             .rpc();
         var gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-        expect(gaugeFactoryState.currentRewardsEpoch).equal(2);
+        expect(gaugeFactoryState.currentVotingEpoch).equal(3);
 
         // clawback rewards when epoch gauge is not existed, voting epoch 1
-        await clawbackBribe(bribeResult.bribe, adminKP, 2, programGauge);
+        await clawbackBribe(bribeResult.bribe, adminKP, 1, programGauge);
 
         let tokenAccount = await getOrCreateATA(bribeResult.tokenMint, adminKP.publicKey, adminKP, provider.connection);
         var tokenAccountBalance = await provider.connection
@@ -556,7 +554,7 @@ describe("Bribe Gauge", () => {
 
 
         // clawback rewards when epoch gauge is not existed, voting epoch 2
-        await clawbackBribe(bribeResult.bribe, adminKP, 3, programGauge);
+        await clawbackBribe(bribeResult.bribe, adminKP, 2, programGauge);
         var tokenAccountBalance = await provider.connection
             .getTokenAccountBalance(tokenAccount);
 
@@ -572,8 +570,8 @@ describe("Bribe Gauge", () => {
             })
             .rpc();
 
-        // clawback rewards when epoch gauge is not existed, voting epoch 3
-        await clawbackBribe(bribeResult.bribe, adminKP, 4, programGauge);
+        // clawback rewards when epoch gauge is existed but no one vote for, voting epoch 3
+        await clawbackBribe(bribeResult.bribe, adminKP, 3, programGauge);
         var tokenAccountBalance = await provider.connection
             .getTokenAccountBalance(tokenAccount);
 

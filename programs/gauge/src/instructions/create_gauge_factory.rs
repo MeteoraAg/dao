@@ -63,7 +63,7 @@ pub fn handler(
     gauge_factory.foreman = foreman;
     gauge_factory.epoch_duration_seconds = epoch_duration_seconds;
 
-    gauge_factory.current_rewards_epoch = 0;
+    gauge_factory.current_voting_epoch = 1; //start from 1
 
     gauge_factory.next_epoch_starts_at = first_epoch_starts_at;
 

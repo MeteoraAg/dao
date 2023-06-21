@@ -56,9 +56,9 @@ pub fn get_total_bribe_rewards(reward_each_epoch: u64, bribe_epoch_end: u32, bri
 pub fn handler(ctx: Context<CreateBribe>, reward_each_epoch: u64, bribe_rewards_epoch_end: u32) -> Result<()> {
     // check bribe end is after voting epoch timestamp
     let gauge_factory = &ctx.accounts.gauge_factory;
-    let distribute_rewards_epoch = gauge_factory.distribute_rewards_epoch()?;
+    let current_voting_epoch = gauge_factory.current_voting_epoch;
     invariant!(
-        bribe_rewards_epoch_end >= distribute_rewards_epoch,
+        bribe_rewards_epoch_end >= gauge_factory.current_voting_epoch,
         BribeEpochEndError
     );
     invariant!(
@@ -67,7 +67,7 @@ pub fn handler(ctx: Context<CreateBribe>, reward_each_epoch: u64, bribe_rewards_
     );
 
     // get total bribe rewards
-    let total_bribe_rewards = get_total_bribe_rewards(reward_each_epoch, bribe_rewards_epoch_end, distribute_rewards_epoch).ok_or(MathOverflow)?;
+    let total_bribe_rewards = get_total_bribe_rewards(reward_each_epoch, bribe_rewards_epoch_end, current_voting_epoch).ok_or(MathOverflow)?;
     // send to vault
     token::transfer(
         CpiContext::new(
@@ -87,13 +87,13 @@ pub fn handler(ctx: Context<CreateBribe>, reward_each_epoch: u64, bribe_rewards_
     bribe.reward_each_epoch = reward_each_epoch;
     bribe.briber = ctx.accounts.payer.key();
     bribe.token_account_vault = ctx.accounts.token_account_vault.key();
-    bribe.bribe_rewards_epoch_start = distribute_rewards_epoch;
+    bribe.bribe_rewards_epoch_start = current_voting_epoch;
     bribe.bribe_rewards_epoch_end = bribe_rewards_epoch_end;
 
     emit!(BribeCreateEvent {
         gauge: ctx.accounts.gauge.key(),
         bribe: ctx.accounts.bribe.key(),
-        bribe_rewards_epoch_start: distribute_rewards_epoch,
+        bribe_rewards_epoch_start: current_voting_epoch,
         bribe_rewards_epoch_end,
         reward_each_epoch,
     });

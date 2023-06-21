@@ -48,7 +48,7 @@ pub struct CloseEpochGaugeVote<'info> {
 }
 
 pub fn handler(ctx: Context<CloseEpochGaugeVote>, voting_epoch: u32) -> Result<()> {
-    let current_voting_epoch = ctx.accounts.gauge_factory.voting_epoch()?;
+    let current_voting_epoch = ctx.accounts.gauge_factory.current_voting_epoch;
     invariant!(voting_epoch < current_voting_epoch, CloseEpochNotElapsed);
 
     let (epoch_gauge_vote_key, _) =

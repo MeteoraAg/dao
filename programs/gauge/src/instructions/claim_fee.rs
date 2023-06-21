@@ -2,7 +2,7 @@
 
 use crate::*;
 
-/// Accounts for [gauge::create_epoch_gauge].
+/// Accounts for [gauge::claim_fee].
 #[derive(Accounts)]
 #[instruction(voting_epoch: u32)]
 pub struct ClaimFee<'info> {
@@ -45,7 +45,7 @@ pub struct ClaimFee<'info> {
 }
 
 pub fn handler(ctx: Context<ClaimFee>, voting_epoch: u32) -> Result<()> {
-    let current_voting_epoch = ctx.accounts.gauge_factory.voting_epoch()?;
+    let current_voting_epoch = ctx.accounts.gauge_factory.current_voting_epoch;
     invariant!(voting_epoch < current_voting_epoch, CloseEpochNotElapsed);
 
     let gauge = &mut ctx.accounts.gauge;

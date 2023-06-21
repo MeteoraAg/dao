@@ -361,7 +361,7 @@ describe("Claim fee Gauge", () => {
             })
             .rpc();
         let gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-        expect(gaugeFactoryState.currentRewardsEpoch).equal(2);
+        expect(gaugeFactoryState.currentVotingEpoch).equal(3);
 
         // claim some fee in epoch 2
         await claimAFeeInVotingEpoch(gauge, voterKP, 2, programGauge, programVoter, programMocAmm);
@@ -425,7 +425,7 @@ describe("Claim fee Gauge", () => {
             })
             .rpc();
         gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-        expect(gaugeFactoryState.currentRewardsEpoch).equal(3);
+        expect(gaugeFactoryState.currentVotingEpoch).equal(4);
 
         // claim some fee in epoch 3
         await claimBFeeInVotingEpoch(gauge, voterKP, 3, programGauge, programVoter, programMocAmm);
@@ -468,7 +468,7 @@ describe("Claim fee Gauge", () => {
             })
             .rpc();
         let gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-        expect(gaugeFactoryState.currentRewardsEpoch).equal(1);
+        expect(gaugeFactoryState.currentVotingEpoch).equal(2);
 
         // // wait for next epoch
         await sleep(TEST_EPOCH_SECONDS * 1_000 + 500);
@@ -481,7 +481,7 @@ describe("Claim fee Gauge", () => {
             })
             .rpc();
         gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-        expect(gaugeFactoryState.currentRewardsEpoch).equal(2);
+        expect(gaugeFactoryState.currentVotingEpoch).equal(3);
 
         await getOrCreateEpochGaugeForCurrentEpoch(gauge, programGauge);
 
@@ -501,7 +501,7 @@ describe("Claim fee Gauge", () => {
             })
             .rpc();
         gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-        expect(gaugeFactoryState.currentRewardsEpoch).equal(3);
+        expect(gaugeFactoryState.currentVotingEpoch).equal(4);
 
         // claim some fee in epoch 3
         await claimAFeeInVotingEpoch(gauge, voterKP, 3, programGauge, programVoter, programMocAmm);
@@ -565,7 +565,7 @@ describe("Claim fee Gauge", () => {
             })
             .rpc();
         let gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-        expect(gaugeFactoryState.currentRewardsEpoch).equal(1);
+        expect(gaugeFactoryState.currentVotingEpoch).equal(2);
 
 
         let epochGauge = await getOrCreateEpochGaugeForCurrentEpoch(gauge, programGauge);
@@ -594,7 +594,7 @@ describe("Claim fee Gauge", () => {
             })
             .rpc();
         gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeFactory);
-        expect(gaugeFactoryState.currentRewardsEpoch).equal(2);
+        expect(gaugeFactoryState.currentVotingEpoch).equal(3);
 
         // voter 1 claim some fee in epoch 2
         await claimAFeeInVotingEpoch(gauge, voterKP, 2, programGauge, programVoter, programMocAmm);
@@ -647,7 +647,7 @@ async function assertEpochFee(gauge: PublicKey) {
 
     // assert fee in epoch
     let gaugeFactoryState = await programGauge.account.gaugeFactory.fetch(gaugeState.gaugeFactory);
-    let votingEpoch = gaugeFactoryState.currentRewardsEpoch + 1;
+    let votingEpoch = gaugeFactoryState.currentVotingEpoch;
 
     let totalEpochAFee = 0;
     let totalEpochBFee = 0;

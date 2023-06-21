@@ -159,18 +159,15 @@ pub mod gauge {
     ///
     /// Permissionless, anyone can crate bribe
     #[access_control(ctx.accounts.validate())]
-    pub fn claim_bribe(ctx: Context<ClaimBribe>, distribute_rewards_epoch: u32) -> Result<()> {
-        claim_bribe::handler(ctx, distribute_rewards_epoch)
+    pub fn claim_bribe(ctx: Context<ClaimBribe>, voting_epoch: u32) -> Result<()> {
+        claim_bribe::handler(ctx, voting_epoch)
     }
     /// Rescue an [Bribe] for voting epoch
     ///
     /// Briber claim rewards back in case onbody vote for a gauge in this epoch
     #[access_control(ctx.accounts.validate())]
-    pub fn clawback_bribe(
-        ctx: Context<ClawbackBribe>,
-        distribute_rewards_epoch: u32,
-    ) -> Result<()> {
-        clawback_bribe::handler(ctx, distribute_rewards_epoch)
+    pub fn clawback_bribe(ctx: Context<ClawbackBribe>, voting_epoch: u32) -> Result<()> {
+        clawback_bribe::handler(ctx, voting_epoch)
     }
 }
 

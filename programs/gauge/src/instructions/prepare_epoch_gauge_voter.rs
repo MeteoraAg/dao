@@ -22,7 +22,7 @@ pub struct PrepareEpochGaugeVoter<'info> {
         seeds = [
             b"EpochGaugeVoter".as_ref(),
             gauge_voter.key().as_ref(),
-            gauge_factory.voting_epoch()?.to_le_bytes().as_ref()
+            gauge_factory.current_voting_epoch.to_le_bytes().as_ref()
         ],
         bump,
         space = 8 + std::mem::size_of::<EpochGaugeVoter>(),
@@ -49,7 +49,7 @@ impl<'info> PrepareEpochGaugeVoter<'info> {
 }
 
 pub fn handler(ctx: Context<PrepareEpochGaugeVoter>) -> Result<()> {
-    let voting_epoch = ctx.accounts.gauge_factory.voting_epoch()?;
+    let voting_epoch = ctx.accounts.gauge_factory.current_voting_epoch;
     let voting_power = unwrap_int!(ctx.accounts.power());
 
     let epoch_gauge_voter = &mut ctx.accounts.epoch_gauge_voter;
