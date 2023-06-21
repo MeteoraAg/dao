@@ -375,7 +375,10 @@ fn prepare_epoch_gauge_voter(program: &Program, base: Pubkey) -> Result<()> {
         &[
             b"EpochGaugeVoter".as_ref(),
             gauge_voter.as_ref(),
-            gauge_factory_state.voting_epoch()?.to_le_bytes().as_ref(),
+            gauge_factory_state
+                .current_voting_epoch
+                .to_le_bytes()
+                .as_ref(),
         ],
         &gauge::id(),
     );
@@ -436,7 +439,10 @@ fn reset_epoch_gauge_voter(program: &Program, base: Pubkey) -> Result<()> {
         &[
             b"EpochGaugeVoter".as_ref(),
             gauge_voter.as_ref(),
-            gauge_factory_state.voting_epoch()?.to_le_bytes().as_ref(),
+            gauge_factory_state
+                .current_voting_epoch
+                .to_le_bytes()
+                .as_ref(),
         ],
         &gauge::id(),
     );
@@ -606,7 +612,10 @@ fn gauge_commit_vote(program: &Program, token_mint: Pubkey, base: Pubkey) -> Res
         &[
             b"EpochGauge".as_ref(),
             gauge.as_ref(),
-            gauge_factory_state.voting_epoch()?.to_le_bytes().as_ref(),
+            gauge_factory_state
+                .current_voting_epoch
+                .to_le_bytes()
+                .as_ref(),
         ],
         &gauge::id(),
     );
@@ -635,7 +644,10 @@ fn gauge_commit_vote(program: &Program, token_mint: Pubkey, base: Pubkey) -> Res
         &[
             b"EpochGaugeVoter".as_ref(),
             gauge_voter.as_ref(),
-            gauge_factory_state.voting_epoch()?.to_le_bytes().as_ref(),
+            gauge_factory_state
+                .current_voting_epoch
+                .to_le_bytes()
+                .as_ref(),
         ],
         &gauge::id(),
     );
@@ -644,7 +656,10 @@ fn gauge_commit_vote(program: &Program, token_mint: Pubkey, base: Pubkey) -> Res
         &[
             b"EpochGaugeVote".as_ref(),
             gauge_vote.as_ref(),
-            gauge_factory_state.voting_epoch()?.to_le_bytes().as_ref(),
+            gauge_factory_state
+                .current_voting_epoch
+                .to_le_bytes()
+                .as_ref(),
         ],
         &gauge::id(),
     );
@@ -726,7 +741,10 @@ fn gauge_revert_vote(program: &Program, token_mint: Pubkey, base: Pubkey) -> Res
         &[
             b"EpochGauge".as_ref(),
             gauge.as_ref(),
-            gauge_factory_state.voting_epoch()?.to_le_bytes().as_ref(),
+            gauge_factory_state
+                .current_voting_epoch
+                .to_le_bytes()
+                .as_ref(),
         ],
         &gauge::id(),
     );
@@ -735,7 +753,10 @@ fn gauge_revert_vote(program: &Program, token_mint: Pubkey, base: Pubkey) -> Res
         &[
             b"EpochGaugeVoter".as_ref(),
             gauge_voter.as_ref(),
-            gauge_factory_state.voting_epoch()?.to_le_bytes().as_ref(),
+            gauge_factory_state
+                .current_voting_epoch
+                .to_le_bytes()
+                .as_ref(),
         ],
         &gauge::id(),
     );
@@ -744,7 +765,10 @@ fn gauge_revert_vote(program: &Program, token_mint: Pubkey, base: Pubkey) -> Res
         &[
             b"EpochGaugeVote".as_ref(),
             gauge_vote.as_ref(),
-            gauge_factory_state.voting_epoch()?.to_le_bytes().as_ref(),
+            gauge_factory_state
+                .current_voting_epoch
+                .to_le_bytes()
+                .as_ref(),
         ],
         &gauge::id(),
     );
@@ -867,10 +891,7 @@ fn sync_gauge(program: &Program, token_mint: Pubkey, base: Pubkey) -> Result<()>
         &[
             b"EpochGauge".as_ref(),
             gauge.as_ref(),
-            gauge_factory_state
-                .current_rewards_epoch
-                .to_le_bytes()
-                .as_ref(),
+            gauge_factory_state.rewards_epoch().to_le_bytes().as_ref(),
         ],
         &gauge::id(),
     );
