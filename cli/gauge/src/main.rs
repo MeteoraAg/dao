@@ -891,7 +891,7 @@ fn sync_gauge(program: &Program, token_mint: Pubkey, base: Pubkey) -> Result<()>
         &[
             b"EpochGauge".as_ref(),
             gauge.as_ref(),
-            gauge_factory_state.rewards_epoch().to_le_bytes().as_ref(),
+            gauge_factory_state.rewards_epoch()?.to_le_bytes().as_ref(),
         ],
         &gauge::id(),
     );
