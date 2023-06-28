@@ -15,6 +15,7 @@ members = [
     "cli/quarry",
     "cli/smartwallet",
     "cli/voter",
+    "cli/moc_amm",
 ]
 
 [profile.release]

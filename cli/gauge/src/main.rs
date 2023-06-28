@@ -52,8 +52,8 @@ fn main() -> Result<()> {
                 base,
             )?;
         }
-        CliCommand::CreateGauge { token_mint } => {
-            create_gauge(&program, token_mint, base.pubkey())?;
+        CliCommand::CreateGauge { quarry_base } => {
+            create_gauge(&program, quarry_base, base.pubkey())?;
         }
         CliCommand::CreateGaugeVoter {} => {
             create_gauge_voter(&program, base.pubkey())?;
@@ -82,8 +82,8 @@ fn main() -> Result<()> {
         CliCommand::GaugeRevertVote { token_mint } => {
             gauge_revert_vote(&program, token_mint, base.pubkey())?;
         }
-        CliCommand::GaugeEnable { token_mint } => {
-            gauge_enable(&program, token_mint, base.pubkey())?;
+        CliCommand::GaugeEnable { quarry_base } => {
+            gauge_enable(&program, quarry_base, base.pubkey())?;
         }
         CliCommand::GaugeDisable { token_mint } => {
             gauge_disable(&program, token_mint, base.pubkey())?;
@@ -145,11 +145,20 @@ fn create_gauge_factory(
     Ok(())
 }
 
-fn create_gauge(program: &Program, token_mint: Pubkey, base: Pubkey) -> Result<()> {
+fn create_gauge(program: &Program, quarry_base: String, base: Pubkey) -> Result<()> {
+    let quarry_base =
+        read_keypair_file(&*shellexpand::tilde(&quarry_base)).expect("Requires a keypair file");
+
     let (rewarder, _bump) =
         Pubkey::find_program_address(&[b"Rewarder".as_ref(), base.as_ref()], &quarry::id());
+
+    let (amm_pool, bump) = Pubkey::find_program_address(
+        &[b"moc_amm".as_ref(), quarry_base.pubkey().as_ref()],
+        &moc_amm::id(),
+    );
+
     let (quarry, _bump) = Pubkey::find_program_address(
-        &[b"Quarry".as_ref(), rewarder.as_ref(), token_mint.as_ref()],
+        &[b"Quarry".as_ref(), rewarder.as_ref(), amm_pool.as_ref()],
         &quarry::id(),
     );
 
@@ -161,14 +170,14 @@ fn create_gauge(program: &Program, token_mint: Pubkey, base: Pubkey) -> Result<(
         &gauge::id(),
     );
 
-    let gauge_state: gauge::Gauge = program.account(gauge)?;
+    // let gauge_state: gauge::Gauge = program.account(gauge)?;
 
     let builder = program
         .request()
         .accounts(gauge::accounts::CreateGauge {
             quarry,
             gauge,
-            amm_pool: gauge_state.amm_pool,
+            amm_pool,
             gauge_factory,
             payer: program.payer(),
             system_program: system_program::id(),
@@ -794,11 +803,19 @@ fn gauge_revert_vote(program: &Program, token_mint: Pubkey, base: Pubkey) -> Res
     Ok(())
 }
 
-fn gauge_enable(program: &Program, token_mint: Pubkey, base: Pubkey) -> Result<()> {
+fn gauge_enable(program: &Program, quarry_base: String, base: Pubkey) -> Result<()> {
+    let quarry_base =
+        read_keypair_file(&*shellexpand::tilde(&quarry_base)).expect("Requires a keypair file");
+
+    let (amm_pool, bump) = Pubkey::find_program_address(
+        &[b"moc_amm".as_ref(), quarry_base.pubkey().as_ref()],
+        &moc_amm::id(),
+    );
+
     let (rewarder, _bump) =
         Pubkey::find_program_address(&[b"Rewarder".as_ref(), base.as_ref()], &quarry::id());
     let (quarry, _bump) = Pubkey::find_program_address(
-        &[b"Quarry".as_ref(), rewarder.as_ref(), token_mint.as_ref()],
+        &[b"Quarry".as_ref(), rewarder.as_ref(), amm_pool.as_ref()],
         &quarry::id(),
     );
     let (gauge_factory, _bump) =

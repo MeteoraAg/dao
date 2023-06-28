@@ -61,7 +61,7 @@ pub enum CliCommand {
     },
     CreateQuarry {
         #[clap(long)]
-        token_mint: Pubkey,
+        system_base: String,
     },
     SetRewardsShare {
         #[clap(long)]
@@ -73,7 +73,7 @@ pub enum CliCommand {
         #[clap(long)]
         famine_ts: i64,
         #[clap(long)]
-        token_mint: Pubkey,
+        system_base: String,
     },
     UpdateQuarryRewards {
         #[clap(long)]

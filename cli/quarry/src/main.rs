@@ -69,8 +69,8 @@ fn main() -> Result<()> {
         CliCommand::SetAnnualRewards { new_rate } => {
             set_annual_rewards(&program, new_rate, base.pubkey())?;
         }
-        CliCommand::CreateQuarry { token_mint } => {
-            create_quarry(&program, token_mint, base.pubkey())?;
+        CliCommand::CreateQuarry { system_base } => {
+            create_quarry(&program, system_base, base.pubkey())?;
         }
         CliCommand::SetRewardsShare {
             new_share,
@@ -80,9 +80,9 @@ fn main() -> Result<()> {
         }
         CliCommand::SetFamine {
             famine_ts,
-            token_mint,
+            system_base,
         } => {
-            set_famine_ts(&program, famine_ts, token_mint, base.pubkey())?;
+            set_famine_ts(&program, famine_ts, system_base, base.pubkey())?;
         }
         CliCommand::UpdateQuarryRewards { token_mint } => {
             update_quarry_rewards(&program, token_mint, base.pubkey())?;
@@ -244,13 +244,18 @@ fn set_annual_rewards(program: &Program, new_rate: u64, base: Pubkey) -> Result<
     println!("Signature {:?}", signature);
     Ok(())
 }
-fn create_quarry(program: &Program, token_mint: Pubkey, base: Pubkey) -> Result<()> {
-    let (rewarder, bump) =
-        Pubkey::find_program_address(&[b"Rewarder".as_ref(), base.as_ref()], &quarry::id());
+fn create_quarry(program: &Program, system_base: String, base: Pubkey) -> Result<()> {
+    let system_base =
+        read_keypair_file(&*shellexpand::tilde(&system_base)).expect("Requires a keypair file");
+
+    let (rewarder, bump) = Pubkey::find_program_address(
+        &[b"Rewarder".as_ref(), system_base.pubkey().as_ref()],
+        &quarry::id(),
+    );
     let (amm_pool, bump) =
         Pubkey::find_program_address(&[b"moc_amm".as_ref(), base.as_ref()], &moc_amm::id());
     let (quarry, bump) = Pubkey::find_program_address(
-        &[b"Quarry".as_ref(), rewarder.as_ref(), token_mint.as_ref()],
+        &[b"Quarry".as_ref(), rewarder.as_ref(), amm_pool.as_ref()],
         &quarry::id(),
     );
     let builder = program
@@ -299,13 +304,21 @@ fn set_rewards_share(
 fn set_famine_ts(
     program: &Program,
     famine_ts: i64,
-    token_mint: Pubkey,
+    system_base: String,
     base: Pubkey,
 ) -> Result<()> {
-    let (rewarder, _bump) =
-        Pubkey::find_program_address(&[b"Rewarder".as_ref(), base.as_ref()], &quarry::id());
+    let system_base =
+        read_keypair_file(&*shellexpand::tilde(&system_base)).expect("Requires a keypair file");
+
+    let (amm_pool, bump) =
+        Pubkey::find_program_address(&[b"moc_amm".as_ref(), base.as_ref()], &moc_amm::id());
+
+    let (rewarder, _bump) = Pubkey::find_program_address(
+        &[b"Rewarder".as_ref(), system_base.pubkey().as_ref()],
+        &quarry::id(),
+    );
     let (quarry, _bump) = Pubkey::find_program_address(
-        &[b"Quarry".as_ref(), rewarder.as_ref(), token_mint.as_ref()],
+        &[b"Quarry".as_ref(), rewarder.as_ref(), amm_pool.as_ref()],
         &quarry::id(),
     );
     let builder = program

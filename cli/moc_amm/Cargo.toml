@@ -1,5 +1,5 @@
 [package]
-name = "gauge-cli"
+name = "moc-amm-cli"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,10 +7,6 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "3.1.8", features = ["derive"] }
-gauge = { path = "../../programs/gauge" }
-quarry = { path = "../../programs/quarry" }
-minter = { path = "../../programs/minter" }
-voter = { path = "../../programs/voter" }
 moc-amm = { path = "../../programs/moc-amm" }
 shellexpand = "2.1.0"
 anchor-lang = "0.26.0"
@@ -18,5 +14,6 @@ anchor-spl = "0.26.0"
 anchor-client = "0.26.0"
 anyhow = "1.0.57"
 solana-program = "1.14.12"
-utils-cli = {path="../utils"}
+utils-cli = {path ="../utils"}
+spl-associated-token-account = "1.1.2"
 spl-token = "3.5.0"

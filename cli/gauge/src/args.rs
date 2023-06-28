@@ -47,7 +47,7 @@ pub enum CliCommand {
     },
     CreateGauge {
         #[clap(long)]
-        token_mint: Pubkey,
+        quarry_base: String,
     },
     CreateGaugeVoter {},
     CreateGaugeVote {
@@ -78,7 +78,7 @@ pub enum CliCommand {
     },
     GaugeEnable {
         #[clap(long)]
-        token_mint: Pubkey,
+        quarry_base: String,
     },
     GaugeDisable {
         #[clap(long)]

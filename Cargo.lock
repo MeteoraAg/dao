@@ -1630,6 +1630,7 @@ dependencies = [
  "clap 3.2.25",
  "gauge",
  "minter",
+ "moc-amm",
  "quarry",
  "shellexpand",
  "solana-program",
@@ -2349,6 +2350,23 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "vipers",
+]
+
+[[package]]
+name = "moc-amm-cli"
+version = "0.1.0"
+dependencies = [
+ "anchor-client",
+ "anchor-lang",
+ "anchor-spl",
+ "anyhow",
+ "clap 3.2.25",
+ "moc-amm",
+ "shellexpand",
+ "solana-program",
+ "spl-associated-token-account",
+ "spl-token",
+ "utils-cli",
 ]
 
 [[package]]
@@ -4972,6 +4990,7 @@ dependencies = [
  "regex",
  "shellexpand",
  "spl-associated-token-account",
+ "spl-token",
 ]
 
 [[package]]
